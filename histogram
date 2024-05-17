@@ -1,0 +1,125 @@
+#Note if  Error in plot.new() : figure margins too large, then increase the size of the plot area by dragging on to the left
+
+Histo_1 <- read.csv("C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Hydrology/soil_moisture_sensors_met_sepa_calibrated.csv")
+Histo_1$timestamp <- as.POSIXct(paste(Histo_1$timestamp), format = "%Y-%m-%d %H:%M:%S")
+library(lubridate)
+library(dplyr)
+
+get_season <- function(month) {
+  if (month %in% 3:5) {
+    return("Spring")
+  } else if (month %in% 6:8) {
+    return("Summer")
+  } else if (month %in% 9:11) {
+    return("Fall")
+  } else {
+    return("Winter")
+  }
+}
+
+Histo_1$Season <- sapply(month(Histo_1$timestamp), get_season)
+#filter not NA
+#str(Histo_1)
+
+VWC_CS7 <- Histo_1[!is.na(Histo_1$value.VWC_CS7),]
+
+VWC_CS7 <- VWC_CS7 %>%
+  select(value.VWC_CS7)
+
+VWC_CS8 <- Histo_1[!is.na(Histo_1$value.VWC_CS8),]
+VWC_CS8 <- VWC_CS8 %>%
+  select(value.VWC_CS8)
+
+VWC_TERROS_1 <- Histo_1[!is.na(Histo_1$value.VWC_TERROS_1),]
+VWC_TERROS_1 <- VWC_TERROS_1 %>%
+  select(value.VWC_TERROS_1)
+
+
+VWC_TERROS_2 <- Histo_1[!is.na(Histo_1$value.VWC_TERROS_2),]
+VWC_TERROS_2 <- VWC_TERROS_2 %>%
+  select(value.VWC_TERROS_2)
+
+
+VWC_TERROS_3 <- Histo_1[!is.na(Histo_1$value.VWC_TERROS_3),]
+VWC_TERROS_3 <- VWC_TERROS_3 %>%
+  select(value.VWC_TERROS_3)
+
+VWC_TERROS_4 <- Histo_1[!is.na(Histo_1$value.VWC_TERROS_4),]
+VWC_TERROS_4 <- VWC_TERROS_4 %>%
+  select(value.VWC_TERROS_4)
+
+
+tenHS_VWC_1 <- Histo_1[!is.na(Histo_1$value.tenHS_VWC_1),]
+tenHS_VWC_1 <- tenHS_VWC_1 %>%
+  select(value.tenHS_VWC_1)%>%
+filter(value.tenHS_VWC_1>0)
+
+
+tenHS_VWC_2 <- Histo_1[!is.na(Histo_1$value.tenHS_VWC_2),]
+tenHS_VWC_2 <- tenHS_VWC_2 %>%
+  select(value.tenHS_VWC_2)%>%
+  filter(value.tenHS_VWC_2>0)
+
+VWC_5TM_1 <- Histo_1[!is.na(Histo_1$value.X5TM_1_VWC),]
+VWC_5TM_1 <- VWC_5TM_1 %>%
+  select(value.X5TM_1_VWC)
+
+VWC_5TM_2 <- Histo_1[!is.na(Histo_1$value.X5TM_2_VWC),]
+VWC_5TM_2 <- VWC_5TM_2 %>%
+  select(value.X5TM_2_VWC)
+
+#freq=False will show the density, in this case, the total area of the histogram is equal to 1, this is the probability density function
+#breaks = c(10,20,30,40,50)
+
+#fig.size <- c(5, 8)
+#fig.par <- par(mfrow = c(2, 5), figsize = fig.size)
+par(mfrow=c(2,5))
+par(cex.axis = 1.1, font.axis = 2)
+
+# Specify the number of bins (e.g., 20 bins)
+num_bins <- 15
+
+# Create breaks to achieve the desired number of bins
+breaks_VWC_CS7 <- seq(min(VWC_CS7), max(VWC_CS7), length.out = num_bins + 1)
+breaks_VWC_CS8 <- seq(min(VWC_CS8), max(VWC_CS8), length.out = num_bins + 1)
+breaks_VWC_TERROS_1 <- seq(min(VWC_TERROS_1), max(VWC_TERROS_1), length.out = num_bins + 1)
+breaks_VWC_TERROS_2 <- seq(min(VWC_TERROS_2), max(VWC_TERROS_2), length.out = num_bins + 1)
+breaks_VWC_TERROS_3 <- seq(min(VWC_TERROS_3), max(VWC_TERROS_3), length.out = num_bins + 1)
+breaks_VWC_TERROS_4 <- seq(min(VWC_TERROS_4), max(VWC_TERROS_4), length.out = num_bins + 1)
+breaks_tenHS_VWC_1 <- seq(min(tenHS_VWC_1), max(tenHS_VWC_1), length.out = num_bins + 1)
+breaks_tenHS_VWC_2 <- seq(min(tenHS_VWC_2), max(tenHS_VWC_2), length.out = num_bins + 1)
+breaks_VWC_5TM_1 <- seq(min(VWC_5TM_1), max(VWC_5TM_1), length.out = num_bins + 1)
+breaks_VWC_5TM_2 <- seq(min(VWC_5TM_2), max(VWC_5TM_2), length.out = num_bins + 1)
+
+# Calculate Histogram (density)
+hist(VWC_CS7$value.VWC_CS7*1,breaks = breaks_VWC_CS7, freq = FALSE, labels = F,xlab = "VWC (m3/m3)", ylab = "Frequency", main = "Distribution of CS7", cex.lab = 1.1, font.lab = 2)
+# Calculate and density line on top of Histogram
+lines(density(VWC_CS7$value.VWC_CS7*1), lwd = 2, col = "red")
+
+hist(VWC_CS8$value.VWC_CS8*1,breaks = breaks_VWC_CS8, freq = FALSE, labels = F,xlab = "VWC (m3/m3)", ylab = "Frequency", main = "Distribution of CS8", cex.lab = 1.1, font.lab = 2)
+lines(density(VWC_CS8$value.VWC_CS8*1), lwd = 2, col = "red")
+
+hist(VWC_TERROS_1$value.VWC_TERROS_1*1,breaks = breaks_VWC_TERROS_1, freq = FALSE, labels = F,xlab = "VWC (m3/m3)", ylab = "Frequency", main = "Distribution of Terros_1", cex.lab = 1.1, font.lab = 2)
+lines(density(VWC_TERROS_1$value.VWC_TERROS_1*1), lwd = 2, col = "red")
+
+hist(VWC_TERROS_2$value.VWC_TERROS_2*1,breaks = breaks_VWC_TERROS_2, freq = FALSE, labels = F,xlab = "VWC (m3/m3)", ylab = "Frequency",main = "Distribution of Terros_2", cex.lab = 1.1, font.lab = 2)
+lines(density(VWC_TERROS_2$value.VWC_TERROS_2*1), lwd = 2, col = "red")
+
+hist(VWC_TERROS_3$value.VWC_TERROS_3*1,breaks = breaks_VWC_TERROS_3, freq = FALSE, labels = F,xlab = "VWC (m3/m3)", ylab = "Frequency", main = "Distribution of Terros_3", cex.lab = 1.1, font.lab = 2)
+lines(density(VWC_TERROS_3$value.VWC_TERROS_3*1), lwd = 2, col = "red")
+
+hist(VWC_TERROS_4$value.VWC_TERROS_4*1,breaks = breaks_VWC_TERROS_4, freq = FALSE, labels = F,xlab = "VWC (m3/m3)", ylab = "Frequency",main = "Distribution of Terros_4", cex.lab = 1.1, font.lab = 2)
+lines(density(VWC_TERROS_4$value.VWC_TERROS_4*1), lwd = 2, col = "red")
+
+hist(tenHS_VWC_1$value.tenHS_VWC_1*1,breaks = breaks_tenHS_VWC_1, freq = FALSE, labels = F,xlab = "VWC (m3/m3)", ylab = "Frequency",main = "Distribution of 10HS_1", cex.lab = 1.1, font.lab = 2)
+lines(density(tenHS_VWC_1$value.tenHS_VWC_1*1), lwd = 2, col = "red")
+
+hist(tenHS_VWC_2$value.tenHS_VWC_2*1,breaks = breaks_tenHS_VWC_2, freq = FALSE, labels = F,xlab = "VWC (m3/m3)", ylab = "Frequency",main = "Distribution of 10HS_2", cex.lab = 1.1, font.lab = 2)
+lines(density(tenHS_VWC_2$value.tenHS_VWC_2*1), lwd = 2, col = "red")   
+
+hist(VWC_5TM_1$value.X5TM_1_VWC*1,breaks = breaks_VWC_5TM_1, freq = FALSE, labels = F,xlab = "VWC (m3/m3)", ylab = "Frequency",main = "Distribution of 5TM_1", cex.lab = 1.1, font.lab = 2)
+lines(density(VWC_5TM_1$value.X5TM_1_VWC*1), lwd = 2, col = "red")
+
+hist(VWC_5TM_2$value.X5TM_2_VWC*1,breaks = breaks_VWC_5TM_2, freq = FALSE, labels = F,xlab = "VWC (m3/m3)", ylab = "Frequency",main = "Distribution of 5TM_2", cex.lab = 1.1, font.lab = 2)
+lines(density(VWC_5TM_2$value.X5TM_2_VWC*1), lwd = 2, col = "red")   
+
