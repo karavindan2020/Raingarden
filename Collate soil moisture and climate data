@@ -1,0 +1,452 @@
+#R Studio code to collate soil moisture and climate data
+#Collate soil moisture data from the data logger for respective months
+
+June2021 <- read.csv("C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Field Data/Downloads/Interim June/June2021.csv", header = TRUE)
+
+names(June2021)[1] <- "TIMESTAMP"
+#note the date format and the seperator (-) and accordingly change the format in the code below
+June2021$TIMESTAMP <- as.POSIXct(paste(June2021$TIMESTAMP, format = "%Y-%m-%d %H:%M:%S"))
+
+headers <- read.table("C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Field Data/Downloads/12_11_2021/CR1000XSeries_Table1.dat", skip = 1, header = F, sep =',', nrows = 1, as.is = T)
+headers = headers[-c(34,36)]
+July_Oct2021 = read.table("C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Field Data/Downloads/12_11_2021/CR1000XSeries_Table1.dat", skip = 3, header = F, sep =',')
+July_Oct2021 = July_Oct2021[-c(34,36)]
+colnames(July_Oct2021)= headers
+#Delete the first row, the comma after -1 is important
+July_Oct2021 = July_Oct2021[-1,]
+
+
+Nov21_May22 = read.table("C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Field Data/Downloads/27_05_2022/CR1000XSeries_Table1.dat", skip = 3, header = F, sep =',')
+Nov21_May22 = Nov21_May22[-1,]
+colnames(Nov21_May22)= headers
+
+#Summer time correction
+library(lubridate)
+#note below code ymd_hms uses UTC timezone by default. UTC timezone is 1hr ahead of GMT. Either the datatable can be changed to UTC or query shall be accounted for the time difference. The later approach has been taken.
+#Nov21_May22 <- na.omit(Nov21_May22)
+#time_correction <- Nov21_May22 %>% 
+ # filter(TIMESTAMP > ymd_hms("2022-03-27 03:00:00") & TIMESTAMP < ymd_hms("2022-04-24 23:58:00"))
+#tc <- slice_head(Nov21_May22, n=10)
+#tc <- tc[,c(1,4)]
+#dput(head(tc))
+#time_correction$TIMESTAMP + 1*60*60
+
+
+May22_Jun22 = read.table("C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Field Data/Downloads/23_06_2022/CR1000XSeries_Table1.dat", skip = 3, header = F, sep =',')
+May22_Jun22 = May22_Jun22[-1,]
+colnames(May22_Jun22)= headers
+
+#headers_2 to include LWS 3 readings installed in late June.
+
+headers_2 <- read.table("C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Field Data/Downloads/29_11_2022/CR1000XSeries_Table1.dat", skip = 1, header = F, sep =',', nrows = 1, as.is = T)
+Jun22_Nov22 = read.table("C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Field Data/Downloads/29_11_2022/CR1000XSeries_Table1.dat", skip = 3, header = F, sep =',')
+colnames(Jun22_Nov22)= headers_2
+Jun22_Nov22 = Jun22_Nov22[-1,]
+
+headers_3 <- read.table("C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Field Data/Downloads/13_06_2023/CR1000XSeries_Table1.dat", skip = 1, header = F, sep =',', nrows = 1, as.is = T)
+Nov22_current = read.table("C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Field Data/Downloads/13_06_2023/CR1000XSeries_Table1.dat", skip = 3, header = F, sep =',')
+colnames(Nov22_current)= headers_3
+Nov22_current = Nov22_current[-1,]
+Nov22_current <- Nov22_current [1: ncol(Nov22_current)-1 ]
+Nov22_current <- Nov22_current [1: ncol(Nov22_current)-1 ]
+
+#Meter <- readxl("C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Field Data/Downloads/EM40191 30May22-1526.xls", header = TRUE)
+#Em50 "EM40191" Data
+#May22_current <- na.omit(May22_current)
+library(plyr)
+library(dplyr)
+#July to current data import 
+July_current <- bind_rows(July_Oct2021, Nov21_May22, May22_Jun22, Jun22_Nov22, Nov22_current)
+#convert all columns except Timestamp from character to numeric
+July_current[-1] <- lapply(July_current[-1], as.numeric)
+July_current$TIMESTAMP <- as.POSIXct(paste(July_current$TIMESTAMP), format = "%Y-%m-%d %H:%M:%S")
+
+#library(plyr) for rbind
+site_survey_data_temp <- rbind.fill(June2021, July_current)
+#length(unique(site_survey_data_temp$TIMESTAMP)) == nrow(site_survey_data_temp)
+#Add missing timestamp in the datalogger
+start <- as.POSIXct("2021-06-04 17:02:00")
+interval <- 2
+end <- as.POSIXct("2023-03-01 00:00:00")
+missing_timestamp <- data.frame(TIMESTAMP = seq(from=start, by=interval*60, to=end))
+
+
+#setDT(missing_timestamp); setDT(site_survey_data_temp)
+#c <- setdiff(site_survey_data_temp,site_survey_data)
+#site_survey_data <- merge(missing_timestamp, site_survey_data_temp, by = "TIMESTAMP", allow.cartesian = TRUE)
+#c <- which(colSums(is.na(site_survey_data_temp))>0)
+#names(which(colSums(is.na(site_survey_data_temp))>0))
+#z <- site_survey_data_temp[is.na(site_survey_data_temp$TIMESTAMP), ] 
+#d <- site_survey_data_temp[row.names(site_survey_data_temp)==196349:216603, ]
+
+library(sqldf)
+#outer join
+# For inner/outer/left/right join options see https://stackoverflow.com/questions/1299871/how-to-join-merge-data-frames-inner-outer-left-right
+#str(site_survey_data_temp)
+site_survey_data_raw <- merge(x = missing_timestamp, y = site_survey_data_temp, by = "TIMESTAMP", all = TRUE)
+# merge above resulting in duplicate values for times coinciding winter and summer correction. so the duplicates are removed below
+site_survey_data_raw <- site_survey_data_raw[!duplicated(site_survey_data_raw[c('TIMESTAMP')]),]
+
+outpath <- "C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Hydrology/"
+setwd(outpath)
+#write.csv(site_survey_data_raw, file = "Site_survey_data_raw.csv", row.names = FALSE)
+
+#Script for time correction for summer/winter time change
+#read the raw survey file Site_survey_data_raw.csv
+
+raw_data <- read.csv("C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Hydrology/Site_survey_data_raw.csv", header = TRUE)
+#DROP NA values under the Timestamp. The NA values are due to Summer/Winter time corrections
+raw_data <- raw_data[!is.na(raw_data$TIMESTAMP),]
+
+#head(data)
+#library(lubridate)
+#library(dplyr)
+#filter summer 2021 data for correction - 1hr backwards
+summer_2021 <- raw_data %>% 
+  filter(TIMESTAMP < ymd_hms("2021-10-31 02:02:00"))
+#subset(ini, rownames(ini) %in% include_list)
+summer_2021$TIMESTAMP <- as.POSIXct(paste(summer_2021$TIMESTAMP, format = "%Y-%m-%d %H:%M:%S"))
+summer_2021$TIMESTAMP <- summer_2021$TIMESTAMP - 1*60*60
+#corr <- data.frame(summer_2021$TIMESTAMP - 1*60*60)
+#ini2 <- head(ini, 106862)
+#corr2 <- cbind(corr, ini2)
+#include_list$TIMESTAMP - 1*60*60
+winter_2021 <- raw_data[c(106892:212708),]
+winter_2021$TIMESTAMP <- as.POSIXct(paste(winter_2021$TIMESTAMP, format = "%Y-%m-%d %H:%M:%S"))
+winter_2021$TIMESTAMP <- winter_2021$TIMESTAMP - 1*60*60
+#summer 2022 no correction required as this was adjusted within the logger.
+#276422
+summer_2022 <- raw_data[c(212709:nrow(raw_data)),]
+#library(dplyr)
+summer_2022 <- summer_2022 %>% mutate(tenHS_VWC_1 = replace(tenHS_VWC_1, tenHS_VWC_1 <= 0, 0))
+summer_2022 <- summer_2022 %>% mutate(tenHS_VWC_1 = replace(tenHS_VWC_1, tenHS_VWC_1 == "NA", 0))
+summer_2022 <- summer_2022 %>% mutate(tenHS_VWC_2 = replace(tenHS_VWC_2, tenHS_VWC_2 <= 0, 0))
+summer_2022 <- summer_2022 %>% mutate(tenHS_VWC_2 = replace(tenHS_VWC_2, tenHS_VWC_2 > 1, 0))
+summer_2022 <- summer_2022 %>% mutate(tenHS_VWC_2 = replace(tenHS_VWC_2, tenHS_VWC_2 == "NA", 0))
+#summer_2022$tenHS_VWC_1 <- summer_2022[summer_2022$tenHS_VWC_1 <= 0, "tenHS_VWC_1"] <- 0
+survey_data_time_adjusted <- rbind(summer_2021, winter_2021, summer_2022)
+
+
+start_date <- as.POSIXct("2021-06-04 17:15:00")
+end_date <- as.POSIXct("2023-03-01 00:00:00")
+
+#trimmed_df <- my_df[my_df$Date >= start_date & my_df$Date <= end_date, ]
+
+#survey_data_20230301 <- survey_data_time_adjusted[survey_data_time_adjusted$TIMESTAMP >= start_date & survey_data_time_adjusted$TIMESTAMP <= end_date, ]
+
+#na_rows <- subset(my_data_frame, apply(is.na(my_data_frame[, -which(names(my_data_frame) == "exclude_column")]), 1, any))
+
+
+#na_rows <- subset(survey_data_20230301, apply(is.na(survey_data_20230301[,-41]), 1, any))
+
+
+#survey_data_20230301 <- survey_data_20230301[complete.cases(survey_data_20230301), ]
+
+outpath <- "C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Hydrology/"
+setwd(outpath)
+write.csv(survey_data_time_adjusted, file = "survey_data_time_adjusted.csv", row.names = FALSE)
+
+
+#any(duplicated(survey_data_time_adjusted))
+
+#start_15min <- as.POSIXct("2021-06-04 17:15:00")
+#interval <- 900
+#end_15min <- as.POSIXct("2023-03-01 00:00:00")
+#missing_timestamp_15min <- data.frame(TIMESTAMP = seq(from=start_15min, by=interval*1, to=end_15min))
+
+
+
+# command to identify duplicate values
+#length(unique(site_survey_data_aa$TIMESTAMP)) == nrow(site_survey_data_aa)
+#n_occur <- data.frame(table(site_survey_data_aa$TIMESTAMP))
+#n_occur[n_occur$Freq > 1,]
+#setwd ("C:/Users/KA59/OneDrive - Heriot-Watt University/")
+#write.csv(n_occur, file="check4.csv", quote=F, col.names=TRUE, row.names = F)
+#Program to merge daily Met files into a single file.
+#Do not have any other files apart from the files that need to be merged
+# if the number of columns differ then this will result in error. To target the error file open listcsv and under the 'type' see which has more higher column, delete the additional column even if blank and run again.
+
+#SEPA 15min data
+#sepa <- read.csv("C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Rainfall/SEPA Rainfall/June 2021 to June 2022 15min and tip data/EdinburghRBG_RE_15min.csv", skip = 15, header = TRUE)
+#sepa['TIMESTAMP'] <- as.POSIXct(paste(sepa$Date, sepa$Time), format="%Y-%m-%d %H:%M:%S")
+#sepa$Value.mm. <- as.numeric(sepa$Value.mm.)
+#sepa <- na.omit(sepa)
+#sum(na.omit(sepa$Value.mm.))
+#sum(na.omit(sepa_tip2$Value.mm.))
+
+
+start_sepa <- as.POSIXct("2021-06-04 17:00:00")
+interval_sepa <- 1
+end_sepa <- as.POSIXct("2023-03-01 00:00:00")
+missing_timestamp_sepa <- data.frame(TIMESTAMP = seq(from=start_sepa, by=interval_sepa*60, to=end_sepa))
+#SEPA Raw data - tipdata
+sepa_tip <- read.csv("C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Rainfall/SEPA Rainfall/June 2021 to October 2023 15min data/EdinburghRBG_RE_raw.csv", skip = 15, header = TRUE)
+
+library(lubridate)
+library(dplyr)
+library(tidyr)
+sepa_tip <- sepa_tip %>%
+  mutate(TIMESTAMP = as.POSIXct(paste(Date, Time), format="%Y-%m-%d %H:%M:%S"))
+
+#1min timestep for SWMM
+
+sepa_tipdata <- sepa_tip %>% 
+  mutate(TIMESTAMP = ceiling_date(TIMESTAMP, unit = "2 minutes")) %>% 
+  complete(TIMESTAMP = seq(min(TIMESTAMP), max(TIMESTAMP),
+                           by = "1 min"))
+sepa_tipdata <- na.omit(sepa_tipdata)
+#library(dplyr)
+#group i.e. sum rainfall values
+
+sepa_tipdata <- sepa_tipdata %>%
+  group_by(TIMESTAMP) %>%
+ summarize_at(vars(Value.mm.), sum)
+
+library(sqldf)
+sepa_1mins <- sqldf("select * from missing_timestamp_sepa left join sepa_tipdata using (TIMESTAMP)")
+sepa_1mins$Value.mm.[is.na(sepa_1mins$Value.mm.)] <- 0
+
+names(sepa_1mins)[2] <- "SEPA_Rainfall_mm"
+sepa_1mins <- sepa_1mins[!duplicated(sepa_1mins$TIMESTAMP), ]
+
+
+outpath <- "C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Hydrology/"
+setwd(outpath)
+write.csv(sepa_1mins, file = "sepa_1mins.csv")
+
+
+met_office_daily_weather_1 <- list.files(path="C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Rainfall/Bruce/Daily Data upto June 2022", full.names = T, recursive = F)
+listcsv_1 <- lapply(met_office_daily_weather_1, function(x) read.csv(paste0(x)))
+data_1 <- do.call(rbind, lapply
+                  (met_office_daily_weather_1, read.csv, as.is=T, skip = 6, header = TRUE))
+data_1 <- data_1[,-c(16:18)]
+#Top 6 rows skipped while importing the data and header retained
+met_office_daily_weather_2 <- list.files(path="C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Rainfall/Bruce/Daily data July 2022 onwards", full.names = T, recursive = F)
+listcsv_2 <- lapply(met_office_daily_weather_2, function(x) read.csv(paste0(x)))
+data_2 <- do.call(rbind, lapply
+                  (met_office_daily_weather_2, read.csv, as.is=T, skip = 6, header = TRUE))
+data_2 <- data_2[,-c(16:18)]
+data <- rbind(data_1,data_2)
+keeps <- data[c("Date", "Time", "Dry.Bulb.Temperature", "Dew.Point.Temperature", "Grass.Temperature", "X10cm.Soil.Temperature", "X30cm.Soil.Temperature", "X100cm.Soil.Temperature", "Rainfall.Total.since.0900", "Humidity")]
+# Coerce to `Date` class
+keeps$Date_Formatted <- as.Date(keeps$Date, format = "%d/%m/%Y")
+dateorder <- keeps[order(keeps$Date_Formatted, keeps$Time) , ]
+dateorder$GageID = 'Metoffice'
+dateorder$Year = format(dateorder$Date_Formatted, format = "%Y")
+dateorder$Month = format(dateorder$Date_Formatted, format = "%m")
+dateorder$Day = format(dateorder$Date_Formatted, format = "%d")
+names(dateorder)[10] <- "Humidity_RBGE"
+library(tidyverse)
+dateorder<- cbind(dateorder, strcapture('(\\d{2})(\\d{2})', sprintf('%04d', dateorder$Time), proto = list(Hrs = character(), Min = character())))
+dateorder['Met_Rainfall_mm'] <- NA
+grp <- cumsum(dateorder$Time == 1000)
+dateorder$Met_Rainfall_mm <- ave(dateorder$Rainfall.Total.since.0900, grp, FUN = function(z) c(z[1], diff(z)))
+dateorder$TIMESTAMP <- as.POSIXct(as.character(paste(dateorder$Date, dateorder$Hrs,dateorder$Min )), format= "%d/%m/%Y %H %M")
+met_office_data <- dateorder[, -c(1,2,11:17)]
+met_office_data <- met_office_data[, c(10,9,1:8)]
+
+site_data_and_met_office <- sqldf("select * from survey_data_time_adjusted left join met_office_data using (TIMESTAMP)")
+
+#replace NA value under Rainfall column with zero for ease of plotting
+site_data_and_met_office[, "Met_Rainfall_mm"][is.na(site_data_and_met_office[, "Met_Rainfall_mm"])] <- 0
+
+
+library(zoo)
+#Interpolate NA values within met office data for intermediate timestep, note as the dataframe as leading NAs (starting with NA values) use na.rm = FALSE as by default it's set to True.
+#site_data_and_met_office[, c(42:47,49)] <- na.approx(site_data_and_met_office[, c(42:47,49)], na.rm = FALSE)
+
+#site_data_met_office_and_sepa <- sqldf("select * from site_data_and_met_office left join sepa_2mins using (TIMESTAMP)")
+
+
+library(xts)
+start_date_1 <- as.POSIXct("2021-06-04 16:02:00")
+end_date_2 <- as.POSIXct("2023-02-28 23:50:00")
+
+#lws_data$TIMESTAMP <- as.POSIXct(lws_data$TIMESTAMP)
+trimmed_data_1 <- site_data_and_met_office[site_data_and_met_office$TIMESTAMP >= start_date_1 & site_data_and_met_office$TIMESTAMP <= end_date_2, ]
+
+trimmed_data <- trimmed_data_1[c(1,3,6,10,12,14,16,17,18,19,20,42,43,45)]
+
+Met_Rain <- trimmed_data[c(1,12,13,14)]
+#str(Met_Rain)
+
+em50 <- read.csv("C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Field Data/Downloads/EM50 logger compiled for moisture sensor only.csv")
+
+em50$TIMESTAMP <- as.POSIXct(paste(em50$TIMESTAMP), format="%d/%m/%Y %H:%M")
+
+em50$X5TM_1_VWC <- as.numeric(em50$X5TM_1_VWC)
+em50$X5TM_1_Temp <- as.numeric(em50$X5TM_1_Temp)
+
+em50$X5TM_2_VWC <- as.numeric(em50$X5TM_2_VWC)
+em50$X5TM_2_Temp <- as.numeric(em50$X5TM_2_Temp)
+
+em50 <- em50[,-6]
+em50_trimmed_data <- em50[em50$TIMESTAMP >= start_date_1 & em50$TIMESTAMP <= end_date_2, -3]
+
+all_moisture_sensors <- sqldf("select * from trimmed_data left join em50_trimmed_data using (TIMESTAMP)")
+
+#all_moisture_sensors[, c(2:11,13:16)] <- na.approx(all_moisture_sensors[,c(2:11,13:16)], na.rm = FALSE)
+
+all_moisture_sensors[, c(2:17)] <- na.approx(all_moisture_sensors[,c(2:17)], na.rm = FALSE)
+
+library(dplyr)
+library(zoo)
+
+zoo_df1 <- all_moisture_sensors[,]
+
+zoo_data_2min <- zoo(zoo_df1[,-1], order.by = zoo_df1$TIMESTAMP)
+
+
+resampled_data <- aggregate(zoo_data_2min[,c("VWC_CS8","VWC_CS7","VWC_TERROS_1","VWC_TERROS_2","VWC_TERROS_3","VWC_TERROS_4","tenHS_VWC_1","tenHS_VWC_2","X5TM_1_VWC","X5TM_2_VWC")], as.POSIXct(floor(as.numeric(time(zoo_data_2min)) / (30 * 60)) * (30 * 60), origin = "1970-01-01"), mean)
+
+resampled_data_frame <- data.frame(timestamp = time(resampled_data), value = coredata(resampled_data))
+
+
+# Specify the date for replacement
+replacement_date <- as.POSIXct("2022-04-18 00:00:00")
+
+# Replace monitor issue value to zero
+resampled_data_frame$value.tenHS_VWC_1 <- ifelse(resampled_data_frame$timestamp >= replacement_date, 0, resampled_data_frame$value.tenHS_VWC_1)
+
+resampled_data_frame$value.tenHS_VWC_2 <- ifelse(resampled_data_frame$timestamp >= replacement_date, 0, resampled_data_frame$value.tenHS_VWC_2)
+
+#resampled_data_frame$value.tenHS_VWC_2 <- ifelse(resampled_data_frame$timestamp >= replacement_date, resampled_data_frame$value.X5TM_1_VWC, resampled_data_frame$value.tenHS_VWC_2)
+
+resampled_data_frame <- sqldf("select * from resampled_data_frame left join Met_Rain using (timestamp)")
+
+soil_moisture_sensors_rainfall <- resampled_data_frame
+soil_moisture_sensors_rainfall$Met_Rainfall_mm[is.na(soil_moisture_sensors_rainfall$Met_Rainfall_mm)] <- 0
+soil_moisture_sensors_rainfall$Dry.Bulb.Temperature[is.na(soil_moisture_sensors_rainfall$Dry.Bulb.Temperature)] <- 0
+soil_moisture_sensors_rainfall$Grass.Temperature[is.na(soil_moisture_sensors_rainfall$Grass.Temperature)] <- 0
+
+#missing rainfall value in Met office replaced with SEPA
+library(readxl)
+
+SEPA_1hr = read_excel("C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Rainfall/SEPA rainfall/Hourly data/SEPA hourly June 2021_Oct 2023.xlsx")
+
+SEPA_1hr <- SEPA_1hr[c(1,2)]
+#Evapo_Transpiration <- Evapo_Transpiration[c(1,22,23,29,31,32,37,39)]
+#str(Evapo_Transpiration)
+SEPA_1hr$Timestamp <- as.POSIXct(paste(SEPA_1hr$Timestamp), format="%Y-%m-%d %H:%M:%S")
+
+replacement_met_start <- as.POSIXct("2022-02-15 00:00:00")
+replacement_met_end <- as.POSIXct("2022-02-22 00:00:00")
+
+soil_moisture_sensors_met_sepa <- sqldf("select * from soil_moisture_sensors_rainfall left join SEPA_1hr using (timestamp)")
+
+soil_moisture_sensors_met_sepa$Value[is.na(soil_moisture_sensors_met_sepa$Value)] <- 0
+
+#Met_data_replace_with_SEPA <- SEPA_1hr %>%
+ # filter(Timestamp >= replacement_met_start & Timestamp <= replacement_met_end)
+
+#merged_df <- merge(df1, df2, by = "timestamp", all.x = TRUE)
+
+# Replace part of column1 with column2 based on the date
+soil_moisture_sensors_met_sepa$Met_Rainfall_mm <- ifelse(soil_moisture_sensors_met_sepa$timestamp >= replacement_met_start &
+                                                 resampled_data_frame$timestamp <= replacement_met_end,
+                                                 soil_moisture_sensors_met_sepa$Value, resampled_data_frame$Met_Rainfall_mm)
+
+colnames(soil_moisture_sensors_met_sepa)[colnames(soil_moisture_sensors_met_sepa) == "Value"] ="SEPA_rainfall"
+
+outpath <- "C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Hydrology/"
+setwd(outpath)
+write.csv(soil_moisture_sensors_met_sepa, file = "soil_moisture_sensors_met_sepa_raw.csv", row.names = FALSE)
+
+
+#applying calibration equation on the measured moisture content
+#For Terros calibration equation y = 100.42x3 - 80.56x2 + 22.04x - 1.7989
+#For TenHS sensor the calibration equation is y = 7.598x3 - 2.970x2 + 1.131x + 0.022
+
+custom_function_TenHS <- function(x) {
+  7.598 * x^3 - 2.970 * x^2 + 1.131 * x + 0.022
+}
+
+custom_function_Teros <- function(x) {
+  100.42 * x^3 - 80.56 * x^2 + 22.04 * x - 1.7989
+}
+
+# Apply the custom function to values in the range of calibrated values from laboratory
+soil_moisture_sensors_met_sepa$value.tenHS_VWC_1 <- ifelse(soil_moisture_sensors_met_sepa$value.tenHS_VWC_1 >= 0.07 & soil_moisture_sensors_met_sepa$value.tenHS_VWC_1 <= 0.32, custom_function_TenHS(soil_moisture_sensors_met_sepa$value.tenHS_VWC_1), soil_moisture_sensors_met_sepa$value.tenHS_VWC_1)
+
+soil_moisture_sensors_met_sepa$value.tenHS_VWC_2 <- ifelse(soil_moisture_sensors_met_sepa$value.tenHS_VWC_2 >= 0.07 & soil_moisture_sensors_met_sepa$value.tenHS_VWC_2 <= 0.32, custom_function_TenHS(soil_moisture_sensors_met_sepa$value.tenHS_VWC_2), soil_moisture_sensors_met_sepa$value.tenHS_VWC_2)
+
+
+soil_moisture_sensors_met_sepa$value.VWC_TERROS_1 <- ifelse(soil_moisture_sensors_met_sepa$value.VWC_TERROS_1 >= 0.2 & soil_moisture_sensors_met_sepa$value.VWC_TERROS_1 <= 0.36, custom_function_Teros(soil_moisture_sensors_met_sepa$value.VWC_TERROS_1), soil_moisture_sensors_met_sepa$value.VWC_TERROS_1)
+
+soil_moisture_sensors_met_sepa$value.VWC_TERROS_2 <- ifelse(soil_moisture_sensors_met_sepa$value.VWC_TERROS_2 >= 0.2 & soil_moisture_sensors_met_sepa$value.VWC_TERROS_2 <= 0.36, custom_function_Teros(soil_moisture_sensors_met_sepa$value.VWC_TERROS_2), soil_moisture_sensors_met_sepa$value.VWC_TERROS_2)
+
+soil_moisture_sensors_met_sepa$value.VWC_TERROS_3 <- ifelse(soil_moisture_sensors_met_sepa$value.VWC_TERROS_3 >= 0.2 & soil_moisture_sensors_met_sepa$value.VWC_TERROS_3 <= 0.36, custom_function_Teros(soil_moisture_sensors_met_sepa$value.VWC_TERROS_3), soil_moisture_sensors_met_sepa$value.VWC_TERROS_3)
+
+soil_moisture_sensors_met_sepa$value.VWC_TERROS_4 <- ifelse(soil_moisture_sensors_met_sepa$value.VWC_TERROS_4 >= 0.2 & soil_moisture_sensors_met_sepa$value.VWC_TERROS_4 <= 0.36, custom_function_Teros(soil_moisture_sensors_met_sepa$value.VWC_TERROS_4), soil_moisture_sensors_met_sepa$value.VWC_TERROS_4)
+
+#delete any duplicate entries of timeseries data
+soil_moisture_sensors_met_sepa <- soil_moisture_sensors_met_sepa[!duplicated(soil_moisture_sensors_met_sepa$timestamp), ]
+
+outpath <- "C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Hydrology/"
+setwd(outpath)
+write.csv(soil_moisture_sensors_met_sepa, file = "soil_moisture_sensors_met_sepa_calibrated.csv", row.names = FALSE)
+library(ggplot2)
+library(tidyr)
+#str(SEPA_1hr)
+
+my_data_long <- soil_moisture_sensors_rainfall %>%
+  gather(key = "variable", value = "value", -timestamp, -Met_Rainfall_mm)
+
+ggplot(my_data_long, aes(x = timestamp, y = value, color = variable)) +
+  geom_line() +
+  scale_y_continuous(breaks = seq(0,0.6,by = 0.1))+
+  labs(x = "Date", y = "VWC %/%") +
+  scale_color_brewer(palette = "Set1")+
+  theme_bw()
+
+my_data_long2 <- soil_moisture_sensors_rainfall
+  #gather(key = "variable", value = "value", -timestamp, -value.LWS_1_mV,-value.LWS_2_mV, -value.Dry.Bulb.Temperature)
+# Reverse the order of the 'value' column
+#my_data_long2$Met_Rainfall_mm <- rev(my_data_long2$Met_Rainfall_mm)
+
+ggplot(my_data_long2, aes(x = timestamp)) +
+ geom_line(aes(y = value.VWC_CS7), color = "yellow") +
+  geom_line(aes(y = value.VWC_CS8), color = "red") +
+ # geom_line(aes(y = value.VWC_TERROS_1), color = "green") +
+ # geom_line(aes(y = value.VWC_TERROS_2), color = "purple") +
+ # geom_line(aes(y = value.VWC_TERROS_3), color = "orange") +
+ # geom_line(aes(y = value.VWC_TERROS_4), color = "pink") +
+#  geom_line(aes(y = value.tenHS_VWC_1), color = "brown") +
+#  geom_line(aes(y = value.tenHS_VWC_2), color = "black") +
+  geom_line(aes(y = Met_Rainfall_mm), color = "blue") +
+  
+  #scale_y_continuous(breaks = seq(0,0.6,by = 0.1))+
+                           
+  scale_y_reverse(sec.axis = sec_axis(~.,name = "y2 \n",
+                                         breaks = seq(0,50,by = 5)))+
+theme_bw()
+  
+
+  #theme(legend.position = "top")
+
+#Import COSMOS Easter Bush Data
+headers <- read.csv("C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/COSMOS-UK Easter Bush/COSMOS_UK_30M_EASTB_20210601_20230430.csv", skip = 4, header = F, sep =',', nrows = 1, as.is = T)
+COSMOS_June_Jan2022 = read.csv("C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/COSMOS-UK Easter Bush/COSMOS_UK_30M_EASTB_20210601_20230430.csv", skip = 6, header = F, sep =',')
+colnames(COSMOS_June_Jan2022)= headers
+names(COSMOS_June_Jan2022)[1] <- "TIMESTAMP"
+names(COSMOS_June_Jan2022)[2] <- "Humidity_EB"
+names(COSMOS_June_Jan2022)[3] <- "Air.Temperature_EB"
+names(COSMOS_June_Jan2022)[4] <- "Atmospheric.Pressure_EB"
+names(COSMOS_June_Jan2022)[9] <- "Net.Radiation_EB"
+names(COSMOS_June_Jan2022)[11] <- "Wind.Speed_EB"
+COSMOS_June_Jan2022$TIMESTAMP <- as.POSIXct(paste(COSMOS_June_Jan2022$TIMESTAMP), format = "%d/%m/%Y %H:%M")
+
+site_data_met_office_COSMOS <- sqldf("select * from site_data_and_met_office left join COSMOS_June_Jan2022 using (TIMESTAMP)")
+
+site_data_Metoffice_COSMOS_SEPA <- sqldf("select * from site_data_met_office_COSMOS left join sepa_2mins using (TIMESTAMP)")
+#Climate data
+met_office_data_and_COSMOS_data <- merge(COSMOS_June_Jan2022, met_office_data, by = "TIMESTAMP")
+
+# There are few missing values in Met office data - These are interpolated
+met_office_data_and_COSMOS_data[, c(3:8, 10:20)] <- na.approx(met_office_data_and_COSMOS_data[, c(3:8, 10:20)])
+
+Metoffice_COSMOS_SEPA <- merge(met_office_data_and_COSMOS_data, sepa_2mins, by = "TIMESTAMP")
+
+outpath <- "C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Hydrology/EvapoTranspiration"
+setwd(outpath)
+write.csv(Metoffice_COSMOS_SEPA, file = "MetOffice_COSMOS_SEPA.csv")
