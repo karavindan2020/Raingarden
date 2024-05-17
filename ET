@@ -1,0 +1,472 @@
+#Potential ET calcs
+
+Evapo_Transpiration = read.csv("C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Hydrology/EvapoTranspiration/Met_office_data_and_COSMOS_data.csv")
+
+LA_Index = read.csv("C:/Users/KA59/OneDrive - Heriot-Watt University/OneDrive for Business/Major and Minor Reports/Chapters/Calcs/LAI.csv")
+
+LA_Index$Date <- as.POSIXct(paste(LA_Index$Date), format="%d/%m/%Y")
+
+library(dplyr)
+LA_Index <- LA_Index %>%
+  filter(Date >= as.POSIXct("2021-06-01"))
+
+LA_Index$TIMESTAMP <- format(LA_Index$Date, "%d/%m/%Y %H:%M:%S")
+
+LA_Index <- LA_Index %>%
+  select(TIMESTAMP,LAI)
+str(LA_Index)
+
+LA_Index$TIMESTAMP <- strptime(LA_Index$TIMESTAMP, format = "%d/%m/%Y %H:%M:%S")
+
+
+#print(tail(Evapo_Transpiration))
+  Evapo_Transpiration <- Evapo_Transpiration[c(2,4,5,11,13,14,19,21)]
+  #Evapo_Transpiration <- Evapo_Transpiration[c(1,22,23,29,31,32,37,39)]
+  #str(Evapo_Transpiration)
+  Evapo_Transpiration$TIMESTAMP <- as.POSIXct(paste(Evapo_Transpiration$TIMESTAMP), format="%d/%m/%Y %H:%M")
+  
+  Evapo_Transpiration$Air.Temperature_EB <- as.numeric(Evapo_Transpiration$Air.Temperature_EB)
+  Evapo_Transpiration$Atmospheric.Pressure_EB <- as.numeric(Evapo_Transpiration$Atmospheric.Pressure_EB)
+  Evapo_Transpiration$Net.Radiation_EB   <- as.numeric(Evapo_Transpiration$Net.Radiation_EB)
+  Evapo_Transpiration$Wind.Speed_EB   <- as.numeric(Evapo_Transpiration$Wind.Speed_EB)
+  
+  Evapo_Transpiration$Air.Temperature_EB[Evapo_Transpiration$Air.Temperature_EB=="N/A"] <- NA
+  Evapo_Transpiration$Atmospheric.Pressure_EB[ Evapo_Transpiration$Atmospheric.Pressure_EB=="N/A"] <- NA
+  Evapo_Transpiration$Net.Radiation_EB[Evapo_Transpiration$Net.Radiation_EB=="N/A"] <- NA
+  Evapo_Transpiration$Wind.Speed_EB[Evapo_Transpiration$Wind.Speed_EB=="N/A"] <- NA
+  
+  
+  library(zoo)
+  #Interpolate NA values within met office data for intermediate timestep, note as the dataframe as leading NAs (starting with NA values) use na.rm = FALSE as by default it's set to True.
+  #Evapo_Transpiration[, c(2:4)] <- na.approx(Evapo_Transpiration[, c(2:4)], na.rm = FALSE)
+  Evapo_Transpiration$Dry.Bulb.Temperature <- na.approx(Evapo_Transpiration$Dry.Bulb.Temperature, na.rm = FALSE)
+  Evapo_Transpiration$Dew.Point.Temperature <- na.approx(Evapo_Transpiration$Dew.Point.Temperature, na.rm = FALSE)
+  Evapo_Transpiration$Humidity_RBGE <- na.approx(Evapo_Transpiration$Humidity_RBGE, na.rm = FALSE)
+  
+  # omit record with NA due to summer and winter time correction
+  
+  
+  Evapo_Transpiration <- merge(Evapo_Transpiration, LA_Index, by="TIMESTAMP", all.x=TRUE)
+  
+  Evapo_Transpiration[1, "LAI"] <- 5.5
+  #Evapo_Transpiration[7511, "LAI"] <- 1 #start of spring assumed value of 1
+  #Evapo_Transpiration[7511, "LAI"] <- 1 #start of spring assumed value of 1
+  Evapo_Transpiration[15080, "LAI"] <- 0
+  Evapo_Transpiration$LAI <- na.approx(Evapo_Transpiration$LAI, na.rm = FALSE)
+  Evapo_Transpiration <- na.omit(Evapo_Transpiration)
+  outpath <- "C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Hydrology/EvapoTranspiration"
+  setwd(outpath)
+  write.csv(Evapo_Transpiration, file = "Evapo_Transpiration.csv", row.names = FALSE)
+  
+  #g	Earth-surface gravitational acceleration	9.80665 m/s2
+  gr=9.80665
+  #M	Molar mass of dry air	0.02896968 kg/mol
+  mo=0.02896968
+  #R0	Universal gas constant	8.314462618 J/(mol?K)
+  gc=8.314462618
+  #Altitude of Easter Bush and RBGE in mAOD
+  h_EB = 208
+  h_RBGE=28
+  #Celsius to Kelvin conversion add 273.15
+
+  #convert Radiation to MJ/m2
+  Evapo_Transpiration["Net.Radiation_MJ_m2"] <- (Evapo_Transpiration$Net.Radiation_EB*0.0036)
+  
+  Evapo_Transpiration["Atm_Press_RBGE_kPa"] <- (Evapo_Transpiration$Atmospheric.Pressure_EB/10)*exp((-gr*mo*(h_EB-h_RBGE))/(gc*(Evapo_Transpiration$Air.Temperature_EB+273.15)))
+  #Slope of saturation vapour pressure
+  
+  Evapo_Transpiration["slope_Sat_vap_pre_RBGE"] <- 2503*exp((17.27*Evapo_Transpiration$Dry.Bulb.Temperature)/(Evapo_Transpiration$Dry.Bulb.Temperature+237.3))/(Evapo_Transpiration$Dry.Bulb.Temperature+237.3)^2
+  
+  #soil heat flux G
+  #LAI=0.87
+  Evapo_Transpiration["soil_heat_flux_RBGE"] <- ifelse(Evapo_Transpiration$Net.Radiation_MJ_m2 < 0, 2*exp(-0.5-Evapo_Transpiration$LAI)*Evapo_Transpiration$Net.Radiation_MJ_m2, 0.4*exp(-0.5-Evapo_Transpiration$LAI)*Evapo_Transpiration$Net.Radiation_MJ_m2)
+  
+  #Psychrometric Constant (??)
+  Evapo_Transpiration["psychrometric_constant"] = 0.000665*Evapo_Transpiration$Atm_Press_RBGE_kPa
+  
+  #Numerator constant cn
+  #Day time
+  #tall crop
+  cn = 66
+  
+  #denominator constant cd
+  cd_day = 0.25
+  cd_night = 1.7
+  
+  #Saturation Vapor Pressure (es)
+  Evapo_Transpiration["sat_vap_press"] = 0.6108*exp((17.27*Evapo_Transpiration$Dry.Bulb.Temperature)/(Evapo_Transpiration$Dry.Bulb.Temperature+237.3))
+  
+  #Actual Vapor Pressure (ea)
+  Evapo_Transpiration["act_vap_press"] = 0.6108*exp((17.27*Evapo_Transpiration$Dew.Point.Temperature)/(Evapo_Transpiration$Dew.Point.Temperature+237.3))
+  
+  #Denominator constant Cd
+  
+  Evapo_Transpiration["Cd"] = ifelse (Evapo_Transpiration$Net.Radiation_MJ_m2 < 0, cd_night, cd_day)
+  #Evapo_Transpiration["ET_Pot_tallcrop_mm_hr"] = Evapo_Transpiration$slope_Sat_vap_pre_RBGE+(Evapo_Transpiration$psychrometric_constant*(1+(Evapo_Transpiration$Wind.Speed_EB*ifelse (Evapo_Transpiration$Net.Radiation_MJ_m2 < 0, cd_night, cd_day))))
+  
+  Evapo_Transpiration["ET_Pot_tall_1"] <- (0.408*Evapo_Transpiration$slope_Sat_vap_pre_RBGE*(Evapo_Transpiration$Net.Radiation_MJ_m2-Evapo_Transpiration$soil_heat_flux_RBGE))
+  
+  Evapo_Transpiration["ET_Pot_tall_2"] <- (Evapo_Transpiration$psychrometric_constant*(cn/(Evapo_Transpiration$Dry.Bulb.Temperature+273))*Evapo_Transpiration$Wind.Speed_EB*(Evapo_Transpiration$sat_vap_press-Evapo_Transpiration$act_vap_press))
+  
+  Evapo_Transpiration["ET_Pot_tall_3"] <- Evapo_Transpiration$slope_Sat_vap_pre_RBGE+(Evapo_Transpiration$psychrometric_constant*(1+(Evapo_Transpiration$Wind.Speed_EB*Evapo_Transpiration$Cd)))
+  
+  Evapo_Transpiration["ET_Pot_tall_mm_hr"] <- (Evapo_Transpiration$ET_Pot_tall_1+Evapo_Transpiration$ET_Pot_tall_2)/Evapo_Transpiration$ET_Pot_tall_3
+  
+  
+  library(lubridate)
+  
+  Evapo_Transpiration$month <- month(Evapo_Transpiration$TIMESTAMP)
+  
+  names(Evapo_Transpiration)[names(Evapo_Transpiration) == "ET_Pot_tall_mm_hr"] <- "PET_mm_hr"
+  
+  et_seasonal <- read.csv("C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Hydrology/soil_moisture_sensors_met_sepa_calibrated.csv")
+ #str(et_seasonal)
+  
+  # As there is a formattig issue in R while importing data from csv particularly for time at midnight (doesn't add 00:00:00 even with Posixct, this results in skipping values in further part of the code, 
+  #so a new date time is created within R and appended to table above
+  
+  et_seasonal$timestamp <- as.POSIXct(paste(et_seasonal$timestamp), format = "%Y-%m-%d %H:%M:%S")
+ 
+   et_seasonal_filter <- et_seasonal %>%
+    filter(timestamp > as.POSIXct("2021-06-25 13:00:00"))
+   
+   Daily_ET_1 <- et_seasonal_filter %>%
+     mutate(TIMESTAMP = floor_date(timestamp, unit="hour")) %>%
+     group_by(TIMESTAMP) %>% # group by the day column
+        summarise(
+          Met_rainfall_mm_day=sum(Met_Rainfall_mm),
+          avg_CS7=round(mean(value.VWC_CS7),3),
+        avg_Teros_2=round(mean(value.VWC_TERROS_2),3),
+        avg_Teros_1=round(mean(value.VWC_TERROS_1),3),
+        avg_Teros_3=round(mean(value.VWC_TERROS_3),3),
+        avg_Teros_4=round(mean(value.VWC_TERROS_4),3),
+        avg_CS8=round(mean(value.VWC_CS8),3),
+        avg_tenHS_1 = round(mean(value.tenHS_VWC_1),3),
+       avg_tenHS_2 = round(mean(value.tenHS_VWC_2),3),
+       avg_5TM1= round(mean(value.X5TM_1_VWC),3),
+       avg_5TM2= round(mean(value.X5TM_2_VWC),3))
+   
+ 
+   
+   #ts_data$avg_CS7 <- na.locf(na.locf(na.approx(ts_data$avg_CS7)), fromLast = TRUE) # copy previous value
+   
+   SEPA_hourly = read.csv("C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Rainfall/SEPA Rainfall/Hourly data/SEPA hourly June 2021_Oct 2023.csv")
+   
+   colnames(SEPA_hourly) <- c("TIMESTAMP", "SEPA")           
+   
+   SEPA_hourly$TIMESTAMP <- as.POSIXct(paste(SEPA_hourly$TIMESTAMP), format="%d/%m/%Y %H:%M:%S")
+   
+   #SEPA_hourly <- SEPA_hourly %>% distinct(Timestamp, .keep_all = TRUE)
+   
+   library(lubridate)
+   
+   # Define the start and end times
+   start_time <- ymd_hms("2021-06-01 00:00:00")
+   end_time <- ymd_hms("2023-11-11 06:00:00")
+   
+   # Generate the time sequence at every 60 minutes
+   TIMESTAMP <- seq(start_time, end_time, by = "60 mins")
+  
+   df <- data.frame(TIMESTAMP)
+
+  SEPA <- left_join(df, SEPA_hourly,by = "TIMESTAMP")
+  
+   setwd(outpath)
+  # write.csv(SEPA_daily, file = "SEPA_daily.csv")
+   #combined_table <- cbind(df, SEPA_hourly$Value)
+   
+   Daily_ET_2 <- left_join(Evapo_Transpiration, Daily_ET_1, by = "TIMESTAMP")
+   
+   Daily_ET_3 <- left_join(Daily_ET_2, SEPA, SEPA_daily, by = "TIMESTAMP")
+   
+   Daily_ET_4 <- Daily_ET_3 %>%
+     filter(TIMESTAMP >= as.POSIXct("2021-06-25 12:00:00"))
+   
+   
+   #interpolation of na values due to winter time correction
+   library(zoo)
+  
+   # Linear interpolation
+   Daily_ET_4$Met_rainfall_mm_day <- na.approx(Daily_ET_4$Met_rainfall_mm_day, rule=2) #rule=2 linear interpolation
+   Daily_ET_4$SEPA <- na.approx(Daily_ET_4$SEPA, rule=2, na.rm = FALSE)
+   Daily_ET_4$avg_CS7 <- na.approx(Daily_ET_4$avg_CS7, rule=2)
+   Daily_ET_4$avg_CS8 <- na.approx(Daily_ET_4$avg_CS8, rule=2)
+   Daily_ET_4$avg_Teros_1 <- na.approx(Daily_ET_4$avg_Teros_1, rule=2)
+   Daily_ET_4$avg_Teros_2 <- na.approx(Daily_ET_4$avg_Teros_2, rule=2)
+   Daily_ET_4$avg_Teros_3 <- na.approx(Daily_ET_4$avg_Teros_3, rule=2)
+   Daily_ET_4$avg_Teros_4 <- na.approx(Daily_ET_4$avg_Teros_4, rule=2)
+   Daily_ET_4$avg_tenHS_1 <- na.approx(Daily_ET_4$avg_tenHS_1, rule=2)
+   Daily_ET_4$avg_tenHS_2 <- na.approx(Daily_ET_4$avg_tenHS_2, rule=2)
+   Daily_ET_4$avg_5TM1 <- na.approx(Daily_ET_4$avg_5TM1, rule=2, na.rm = FALSE) #Leading value is a NA
+   Daily_ET_4$avg_5TM2 <- na.approx(Daily_ET_4$avg_5TM2, rule=2, na.rm = FALSE) #Leading value is a NA
+   
+   Daily_ET_NEW <-  Daily_ET_4 %>%
+     mutate(SMEF_CS7 = ifelse(avg_CS7>0.14,1,((avg_CS7-0.03)/0.14)^2/((((avg_CS7-0.03)/0.14)^2)+(1-((avg_CS7-0.03)/0.14))^2)),
+            SMEF_Teros_2 = ifelse(avg_CS7>0.35,0,((avg_Teros_2-0.12)/0.35)^2/((((avg_Teros_2-0.12)/0.35)^2)+(1-((avg_Teros_2-0.12)/0.35))^2)),
+            SMEF_CS8 = ifelse(avg_CS8>0.43,1,((avg_CS8-0.21)/0.43)^2/((((avg_CS8-0.21)/0.43)^2)+(1-((avg_CS8-0.21)/0.43))^2)),
+            SMEF_Teros_1 = ifelse(avg_Teros_1>0.31,1,((avg_Teros_1-0.12)/0.31)^2/((((avg_Teros_1-0.12)/0.31)^2)+(1-((avg_Teros_1-0.12)/0.31))^2)),
+            SMEF_Teros_3 = ifelse(avg_Teros_3>0.36,1,((avg_Teros_3-0.12)/0.36)^2/((((avg_Teros_3-0.12)/0.36)^2)+(1-((avg_Teros_3-0.12)/0.36))^2)),
+            SMEF_Teros_4 = ifelse(avg_Teros_4>0.36,1,((avg_Teros_4-0.12)/0.36)^2/((((avg_Teros_4-0.12)/0.36)^2)+(1-((avg_Teros_4-0.12)/0.36))^2)),
+            SMEF_tenHS_1 = ifelse(avg_tenHS_1>0.41,1,((avg_tenHS_1-0.28)/0.41)^2/((((avg_tenHS_1-0.28)/0.41)^2)+(1-((avg_tenHS_1-0.28)/0.41))^2)),
+            SMEF_tenHS_2 = ifelse(avg_tenHS_2>0.39,1,((avg_tenHS_2-0.28)/0.39)^2/((((avg_tenHS_2-0.28)/0.39)^2)+(1-((avg_tenHS_2-0.28)/0.39))^2)),
+            SMEF_5TM_1 = ifelse(avg_5TM1>0.24,1,((avg_5TM1-0.12)/0.24)^2/((((avg_5TM1-0.12)/0.24)^2)+(1-((avg_5TM1-0.12)/0.24))^2)),
+            SMEF_5TM_2 = ifelse(avg_5TM2>0.41,1,((avg_5TM2-0.28)/0.41)^2/((((avg_5TM2-0.28)/0.41)^2)+(1-((avg_5TM2-0.28)/0.41))^2)),
+            AET_CS7 = PET_mm_hr*1*SMEF_CS7, # 1 should be Ks_CS7_Kcb
+            AET_Teros_2 = PET_mm_hr*1*SMEF_Teros_2, #1 should be Ks_Teros_2_Kcb
+            AET_CS8 = PET_mm_hr*1*SMEF_CS8,
+            AET_Teros_1 = PET_mm_hr*1*SMEF_Teros_1,
+            AET_Teros_3 = PET_mm_hr*1*SMEF_Teros_3,
+            AET_Teros_4 = PET_mm_hr*1*SMEF_Teros_4,
+            AET_tenHS1 = PET_mm_hr*1*SMEF_tenHS_1,
+            AET_tenHS2 =PET_mm_hr*1*SMEF_tenHS_2,
+            AET_5TM1 = PET_mm_hr*1*SMEF_5TM_1,
+            AET_5TM2 = PET_mm_hr*1*SMEF_5TM_2
+     )
+   
+   #Old calibration equation
+   
+       Daily_ET_OLD <-  Daily_ET_4 %>%
+         mutate(SMEF_CS7 = ifelse(avg_CS7>0.14,1,(avg_CS7/0.14)^2/(((avg_CS7/0.14)^2)+(1-(avg_CS7/0.14))^2)),
+               SMEF_Teros_2 = ifelse(avg_Teros_2>0.35,1,(avg_Teros_2/0.35)^2/(((avg_Teros_2/0.35)^2)+(1-(avg_Teros_2/0.35))^2)),
+               SMEF_CS8 = ifelse(avg_CS8>0.43,1,(avg_CS8/0.43)^2/(((avg_CS8/0.43)^2)+(1-(avg_CS8/0.43))^2)),
+               SMEF_Teros_1 = ifelse(avg_Teros_1>0.31,1,(avg_Teros_1/0.31)^2/(((avg_Teros_1/0.31)^2)+(1-(avg_Teros_1/0.31))^2)),
+               SMEF_Teros_3 = ifelse(avg_Teros_3>0.36,1,(avg_Teros_3/0.36)^2/(((avg_Teros_3/0.36)^2)+(1-(avg_Teros_3/0.36))^2)),
+               SMEF_Teros_4 = ifelse(avg_Teros_4>0.36,1,(avg_Teros_4/0.36)^2/(((avg_Teros_4/0.36)^2)+(1-(avg_Teros_4/0.36))^2)),
+               SMEF_tenHS_1 = ifelse(avg_tenHS_1>0.41,1,(avg_tenHS_1/0.41)^2/(((avg_tenHS_1/0.41)^2)+(1-(avg_tenHS_1/0.41))^2)),
+               SMEF_tenHS_2 = ifelse(avg_tenHS_2>0.39,1,(avg_tenHS_2/0.39)^2/(((avg_tenHS_2/0.39)^2)+(1-(avg_tenHS_2/0.39))^2)),
+               SMEF_5TM_1 = ifelse(avg_5TM1>0.24,1,(avg_5TM1/0.24)^2/(((avg_5TM1/0.24)^2)+(1-(avg_5TM1/0.24))^2)),
+               SMEF_5TM_2 = ifelse(avg_5TM2>0.41,1,(avg_5TM2/0.41)^2/(((avg_5TM2/0.41)^2)+(1-(avg_5TM2/0.41))^2)),
+                AET_CS7_HESS = PET_mm_hr*1*SMEF_CS7, # 1 should be Ks_CS7_Kcb
+                AET_Teros_2_HESS = PET_mm_hr*1*SMEF_Teros_2, #1 should be Ks_Teros_2_Kcb
+               AET_CS8_HESS = PET_mm_hr*1*SMEF_CS8,
+               AET_Teros_1_HESS = PET_mm_hr*1*SMEF_Teros_1,
+               AET_Teros_3_HESS = PET_mm_hr*1*SMEF_Teros_3,
+               AET_Teros_4_HESS = PET_mm_hr*1*SMEF_Teros_4,
+               AET_tenHS1_HESS = PET_mm_hr*1*SMEF_tenHS_1,
+                 AET_tenHS2_HESS =PET_mm_hr*1*SMEF_tenHS_2,
+                 AET_5TM1_HESS = PET_mm_hr*1*SMEF_5TM_1,
+                 AET_5TM2_HESS = PET_mm_hr*1*SMEF_5TM_2
+       )
+       
+       Daily_ET_REV <-  Daily_ET_4 %>%
+         mutate(SMEF_CS7 = ifelse(avg_CS7>0.14,1,ifelse(avg_Teros_2>=0.29 & avg_CS7 >0.03 & avg_CS7 <=0.14,(((avg_CS7)/0.14)^2/((((avg_CS7)/0.14)^2)+(1-((avg_CS7)/0.14))^2)),ifelse(avg_Teros_2<0.29 & avg_Teros_2 >0.12,(((avg_CS7-0.03)/0.14)^2/((((avg_CS7-0.03)/0.14)^2)+(1-((avg_CS7-0.03)/0.14))^2)),0))),
+                SMEF_Teros_2 = ifelse(avg_Teros_2>=0.29,0,ifelse(avg_Teros_2 == 0,0,(((avg_Teros_2-0.12)/0.29)^2/((((avg_Teros_2-0.12)/0.29)^2)+(1-((avg_Teros_2-0.12)/0.29))^2)))),
+                SMEF_CS8 = ifelse(avg_CS8>0.43,1,ifelse(avg_Teros_2 >0.12,(((avg_CS8-0.21)/0.43)^2/((((avg_CS8-0.21)/0.43)^2)+(1-((avg_CS8-0.21)/0.43))^2)),0)),
+                SMEF_Teros_1 = ifelse(avg_Teros_1>0.31,1,ifelse(avg_Teros_2>=0.29 ,(((avg_Teros_1-0.12)/0.31)^2/((((avg_Teros_1-0.12)/0.31)^2)+(1-((avg_Teros_1-0.12)/0.31))^2)),0)),
+                SMEF_Teros_3 = ifelse(avg_Teros_3>0.36,1,ifelse(avg_Teros_2>=0.29 ,(((avg_Teros_3-0.12)/0.36)^2/((((avg_Teros_3-0.12)/0.36)^2)+(1-((avg_Teros_3-0.12)/0.36))^2)),0)),
+                SMEF_Teros_4 = ifelse(avg_Teros_4>0.36,1,ifelse(avg_Teros_2>=0.29 ,(((avg_Teros_4-0.12)/0.36)^2/((((avg_Teros_4-0.12)/0.36)^2)+(1-((avg_Teros_4-0.12)/0.36))^2)),0)),
+                SMEF_tenHS_1 = ifelse(avg_tenHS_1>0.41,1,ifelse(avg_tenHS_1 == 0,0,(((avg_tenHS_1-0.28)/0.41)^2/((((avg_tenHS_1-0.28)/0.41)^2)+(1-((avg_tenHS_1-0.28)/0.41))^2)))),
+                SMEF_tenHS_2 = ifelse(avg_tenHS_2>0.39,1,ifelse(avg_tenHS_1 == 0,0,(((avg_tenHS_2-0.28)/0.39)^2/((((avg_tenHS_2-0.28)/0.39)^2)+(1-((avg_tenHS_2-0.28)/0.39))^2)))),
+                SMEF_5TM_1 =   ifelse(avg_5TM1>0.24,1,ifelse(avg_Teros_2>=0.29 ,(((avg_5TM1-0.12)/0.24)^2/((((avg_5TM1-0.12)/0.24)^2)+(1-((avg_5TM1-0.12)/0.24))^2)),0)),
+                SMEF_5TM_2 = ifelse(avg_5TM2>0.41,1,(((avg_5TM2-0.28)/0.41)^2/((((avg_5TM2-0.28)/0.41)^2)+(1-((avg_5TM2-0.28)/0.41))^2))),
+                AET_CS7 = ifelse(avg_CS7 ==0,0,PET_mm_hr*1*SMEF_CS7), # 1 should be Ks_CS7_Kcb
+                AET_Teros_2 = ifelse(avg_Teros_2 ==0,0,PET_mm_hr*1*SMEF_Teros_2), #1 should be Ks_Teros_2_Kcb
+                AET_CS8 = ifelse(avg_CS8 ==0,0,PET_mm_hr*1*SMEF_CS8),
+                AET_Teros_1 = ifelse(avg_Teros_1 ==0,0,PET_mm_hr*1*SMEF_Teros_1),
+                AET_Teros_3 = ifelse(avg_Teros_3 ==0,0,PET_mm_hr*1*SMEF_Teros_3),
+                AET_Teros_4 = ifelse(avg_Teros_4 ==0,0,PET_mm_hr*1*SMEF_Teros_4),
+                AET_tenHS1 = ifelse(avg_tenHS_1 ==0,0,PET_mm_hr*1*SMEF_tenHS_1),
+                AET_tenHS2 =ifelse(avg_tenHS_2 ==0,0,PET_mm_hr*1*SMEF_tenHS_2),
+                AET_5TM1 = ifelse(avg_5TM1 ==0,0,PET_mm_hr*1*SMEF_5TM_1),
+                AET_5TM2 = ifelse(avg_5TM2 ==0,0,PET_mm_hr*1*SMEF_5TM_2)
+         )
+       
+         Daily_ET_calibrated <-  Daily_ET_4 %>%
+         mutate(SMEF_CS7 = ifelse(avg_CS7>0.14,1,ifelse(avg_Teros_2>=0.29 & avg_CS7 >0.045 & avg_CS7 <=0.14,(((avg_CS7)/0.14)^2/((((avg_CS7)/0.14)^2)+(1-((avg_CS7)/0.14))^2)),ifelse(avg_Teros_2<0.29 & avg_Teros_2 >0.12,(((avg_CS7-0.045)/0.14)^2/((((avg_CS7-0.045)/0.14)^2)+(1-((avg_CS7-0.045)/0.14))^2)),0))),
+                SMEF_Teros_2 = ifelse(avg_Teros_2>=0.29,0,ifelse(avg_Teros_2 == 0,0,(((avg_Teros_2-0.115)/0.29)^2/((((avg_Teros_2-0.115)/0.29)^2)+(1-((avg_Teros_2-0.115)/0.29))^2)))),
+                SMEF_CS8 = ifelse(avg_CS8>0.43,1,ifelse(avg_Teros_2 >0.12,(((avg_CS8-0.21)/0.43)^2/((((avg_CS8-0.21)/0.43)^2)+(1-((avg_CS8-0.21)/0.43))^2)),0)),
+                SMEF_Teros_1 = ifelse(avg_Teros_1>0.31,1,ifelse(avg_Teros_2>=0.29 ,(((avg_Teros_1-0.115)/0.31)^2/((((avg_Teros_1-0.115)/0.31)^2)+(1-((avg_Teros_1-0.115)/0.31))^2)),0)),
+                SMEF_Teros_3 = ifelse(avg_Teros_3>0.36,1,ifelse(avg_Teros_2>=0.29 ,(((avg_Teros_3-0.115)/0.36)^2/((((avg_Teros_3-0.115)/0.36)^2)+(1-((avg_Teros_3-0.115)/0.36))^2)),0)),
+                SMEF_Teros_4 = ifelse(avg_Teros_4>0.36,1,ifelse(avg_Teros_2>=0.29 ,(((avg_Teros_4-0.115)/0.36)^2/((((avg_Teros_4-0.115)/0.36)^2)+(1-((avg_Teros_4-0.115)/0.36))^2)),0)),
+                SMEF_tenHS_1 = ifelse(avg_tenHS_1>0.41,1,ifelse(avg_tenHS_1 == 0,0,(((avg_tenHS_1-0.28)/0.41)^2/((((avg_tenHS_1-0.28)/0.41)^2)+(1-((avg_tenHS_1-0.28)/0.41))^2)))),
+                SMEF_tenHS_2 = ifelse(avg_tenHS_2>0.39,1,ifelse(avg_tenHS_1 == 0,0,(((avg_tenHS_2-0.28)/0.39)^2/((((avg_tenHS_2-0.28)/0.39)^2)+(1-((avg_tenHS_2-0.28)/0.39))^2)))),
+                SMEF_5TM_1 =   ifelse(avg_5TM1>0.24,1,ifelse(avg_Teros_2>=0.29 ,(((avg_5TM1-0.115)/0.24)^2/((((avg_5TM1-0.115)/0.24)^2)+(1-((avg_5TM1-0.115)/0.24))^2)),0)),
+                SMEF_5TM_2 = ifelse(avg_5TM2>0.41,1,(((avg_5TM2-0.28)/0.41)^2/((((avg_5TM2-0.28)/0.41)^2)+(1-((avg_5TM2-0.28)/0.41))^2))),
+                AET_CS7 = ifelse(avg_CS7 ==0,0,PET_mm_hr*1*SMEF_CS7), # 1 should be Ks_CS7_Kcb
+                AET_Teros_2 = ifelse(avg_Teros_2 ==0,0,PET_mm_hr*1*SMEF_Teros_2), #1 should be Ks_Teros_2_Kcb
+                AET_CS8 = ifelse(avg_CS8 ==0,0,PET_mm_hr*1*SMEF_CS8),
+                AET_Teros_1 = ifelse(avg_Teros_1 ==0,0,PET_mm_hr*1*SMEF_Teros_1),
+                AET_Teros_3 = ifelse(avg_Teros_3 ==0,0,PET_mm_hr*1*SMEF_Teros_3),
+                AET_Teros_4 = ifelse(avg_Teros_4 ==0,0,PET_mm_hr*1*SMEF_Teros_4),
+                AET_tenHS1 = ifelse(avg_tenHS_1 ==0,0,PET_mm_hr*1*SMEF_tenHS_1),
+                AET_tenHS2 =ifelse(avg_tenHS_2 ==0,0,PET_mm_hr*1*SMEF_tenHS_2),
+                AET_5TM1 = ifelse(avg_5TM1 ==0,0,PET_mm_hr*1*SMEF_5TM_1),
+                AET_5TM2 = ifelse(avg_5TM2 ==0,0,PET_mm_hr*1*SMEF_5TM_2)
+         )
+       
+       Daily_ET_summer21 <-  Daily_ET_4 %>%
+         mutate(SMEF_CS7 = ifelse(avg_CS7>0.14,1,ifelse(avg_Teros_2>=0.29 & avg_CS7 >0.045 & avg_CS7 <=0.14,(((avg_CS7)/0.14)^2/((((avg_CS7)/0.14)^2)+(1-((avg_CS7)/0.14))^2)),ifelse(avg_Teros_2<0.29 & avg_Teros_2 >0.12,(((avg_CS7-0.045)/0.14)^3/((((avg_CS7-0.045)/0.14)^3)+(1-((avg_CS7-0.045)/0.14))^3)),0))),
+                SMEF_Teros_2 = ifelse(avg_Teros_2>=0.29,0,ifelse(avg_Teros_2 == 0,0,(((avg_Teros_2-0.12)/0.29)^3/((((avg_Teros_2-0.12)/0.29)^3)+(1-((avg_Teros_2-0.12)/0.29))^3)))),
+                SMEF_CS8 = ifelse(avg_CS8>0.43,1,ifelse(avg_Teros_2 >0.12,(((avg_CS8-0.21)/0.43)^2/((((avg_CS8-0.21)/0.43)^2)+(1-((avg_CS8-0.21)/0.43))^2)),0)),
+                SMEF_Teros_1 = ifelse(avg_Teros_1>0.31,1,ifelse(avg_Teros_2>=0.29 ,(((avg_Teros_1-0.12)/0.31)^3/((((avg_Teros_1-0.12)/0.31)^3)+(1-((avg_Teros_1-0.12)/0.31))^3)),0)),
+                SMEF_Teros_3 = ifelse(avg_Teros_3>0.36,1,ifelse(avg_Teros_2>=0.29 ,(((avg_Teros_3-0.11)/0.36)^2/((((avg_Teros_3-0.11)/0.36)^2)+(1-((avg_Teros_3-0.11)/0.36))^2)),0)),
+                SMEF_Teros_4 = ifelse(avg_Teros_4>0.36,1,ifelse(avg_Teros_2>=0.29 ,(((avg_Teros_4-0.11)/0.36)^2/((((avg_Teros_4-0.11)/0.36)^2)+(1-((avg_Teros_4-0.11)/0.36))^2)),0)),
+                SMEF_tenHS_1 = ifelse(avg_tenHS_1>0.41,1,ifelse(avg_tenHS_1 == 0,0,(((avg_tenHS_1-0.28)/0.41)^2/((((avg_tenHS_1-0.28)/0.41)^2)+(1-((avg_tenHS_1-0.28)/0.41))^2)))),
+                SMEF_tenHS_2 = ifelse(avg_tenHS_2>0.39,1,ifelse(avg_tenHS_1 == 0,0,(((avg_tenHS_2-0.28)/0.39)^2/((((avg_tenHS_2-0.28)/0.39)^2)+(1-((avg_tenHS_2-0.28)/0.39))^2)))),
+                SMEF_5TM_1 =   ifelse(avg_5TM1>0.24,1,ifelse(avg_Teros_2>=0.29 ,(((avg_5TM1-0.11)/0.24)^2/((((avg_5TM1-0.11)/0.24)^2)+(1-((avg_5TM1-0.11)/0.24))^2)),0)),
+                SMEF_5TM_2 = ifelse(avg_5TM2>0.41,1,(((avg_5TM2-0.28)/0.41)^2/((((avg_5TM2-0.28)/0.41)^2)+(1-((avg_5TM2-0.28)/0.41))^2))),
+                AET_CS7 = ifelse(avg_CS7 ==0,0,PET_mm_hr*1*SMEF_CS7), # 1 should be Ks_CS7_Kcb
+                AET_Teros_2 = ifelse(avg_Teros_2 ==0,0,PET_mm_hr*1*SMEF_Teros_2), #1 should be Ks_Teros_2_Kcb
+                AET_CS8 = ifelse(avg_CS8 ==0,0,PET_mm_hr*1*SMEF_CS8),
+                AET_Teros_1 = ifelse(avg_Teros_1 ==0,0,PET_mm_hr*1*SMEF_Teros_1),
+                AET_Teros_3 = ifelse(avg_Teros_3 ==0,0,PET_mm_hr*1*SMEF_Teros_3),
+                AET_Teros_4 = ifelse(avg_Teros_4 ==0,0,PET_mm_hr*1*SMEF_Teros_4),
+                AET_tenHS1 = ifelse(avg_tenHS_1 ==0,0,PET_mm_hr*1*SMEF_tenHS_1),
+                AET_tenHS2 =ifelse(avg_tenHS_2 ==0,0,PET_mm_hr*1*SMEF_tenHS_2),
+                AET_5TM1 = ifelse(avg_5TM1 ==0,0,PET_mm_hr*1*SMEF_5TM_1),
+                AET_5TM2 = ifelse(avg_5TM2 ==0,0,PET_mm_hr*1*SMEF_5TM_2)
+         )
+       
+       start_date_1 <- as.Date("2021-07-27")
+       end_date_1 <- as.Date("2021-08-06")
+       
+       Summer_2022_NEW_calibrated <- Daily_ET_calibrated %>%
+         filter(TIMESTAMP >= start_date_1, TIMESTAMP <= end_date_1)
+         #select(TIMESTAMP,PET_mm_day, AET_CS7,AET_CS8, AET_Teros_1, AET_Teros_2,AET_Teros_3, AET_Teros_4, AET_tenHS1, AET_tenHS2, AET_5TM1, AET_5TM2, Met_rainfall_mm_day,SEPA)
+       select(TIMESTAMP,avg_Teros_1, avg_Teros_2,SEPA)
+       
+       
+       Summer_2021_OLD <- Daily_ET_OLD %>%
+         filter(TIMESTAMP >= start_date_1, TIMESTAMP <= end_date_1)%>%
+         select(TIMESTAMP,PET_mm_day, AET_CS7_HESS,AET_CS8_HESS, AET_Teros_1_HESS, AET_Teros_2_HESS,AET_Teros_3_HESS, AET_Teros_4_HESS, AET_tenHS1_HESS, AET_tenHS2_HESS, AET_5TM1_HESS, AET_5TM2_HESS, Met_rainfall_mm_day,SEPA)
+       
+       
+       outpath <- "C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Hydrology/EvapoTranspiration"
+       setwd(outpath)
+          write.csv(Summer_2022_NEW_calibrated, file = "Summer_2022_REV28_calibrated.csv")
+       #write.csv(Summer_2021_OLD, file = "Summer_2021_OLD.csv")
+       
+       start_date_2 <- as.Date("2021-09-01")
+       end_date_2 <- as.Date("2021-11-30")
+       
+       Autumn_2021 <- Daily_ET_NEW %>%
+         filter(TIMESTAMP >= start_date_2, TIMESTAMP <= end_date_2)%>%
+         select(TIMESTAMP,PET_mm_day, AET_CS7,AET_CS8, AET_Teros_1, AET_Teros_2,AET_Teros_3, AET_Teros_4, AET_tenHS1, AET_tenHS2, AET_5TM1, AET_5TM2, Met_rainfall_mm_day)
+       
+       
+      # outpath <- "C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Hydrology/EvapoTranspiration"
+       setwd(outpath)
+       write.csv(Autumn_2021, file = "Autumn_2021.csv")
+       
+       start_date_3 <- as.Date("2021-12-01")
+       end_date_3 <- as.Date("2022-02-28")
+       
+       Winter_2021 <- Daily_ET_NEW %>%
+         filter(TIMESTAMP >= start_date_3, TIMESTAMP <= end_date_3)%>%
+         select(TIMESTAMP,PET_mm_day, AET_CS7,AET_CS8, AET_Teros_1, AET_Teros_2,AET_Teros_3, AET_Teros_4, AET_tenHS1, AET_tenHS2, AET_5TM1, AET_5TM2, Met_rainfall_mm_day)
+       
+       
+       #outpath <- "C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Hydrology/EvapoTranspiration"
+       setwd(outpath)
+       write.csv(Winter_2021, file = "Winter_2021.csv")
+       
+       start_date_4 <- as.Date("2022-03-01")
+       end_date_4 <- as.Date("2022-05-31")
+       
+       Spring_2021 <- Daily_ET_NEW %>%
+         filter(TIMESTAMP >= start_date_4, TIMESTAMP <= end_date_4)%>%
+         select(TIMESTAMP,PET_mm_day, AET_CS7,AET_CS8, AET_Teros_1, AET_Teros_2,AET_Teros_3, AET_Teros_4, AET_tenHS1, AET_tenHS2, AET_5TM1, AET_5TM2, Met_rainfall_mm_day)
+       
+       #outpath <- "C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Hydrology/EvapoTranspiration"
+       setwd(outpath)
+       write.csv(Spring_2021, file = "Spring_2021.csv")
+       
+       start_date_5 <- as.Date("2022-06-25")
+       end_date_5 <- as.Date("2022-08-31")
+       
+       Summer_2022_NEW <- Daily_ET_NEW %>%
+         filter(TIMESTAMP >= start_date_5, TIMESTAMP <= end_date_5)%>%
+        # select(TIMESTAMP,PET_mm_day, AET_CS7_HESS,AET_CS8_HESS, AET_Teros_1_HESS, AET_Teros_2_HESS,AET_Teros_3_HESS, AET_Teros_4_HESS, AET_tenHS1_HESS, AET_tenHS2_HESS, AET_5TM1_HESS, AET_5TM2_HESS, Met_rainfall_mm_day,SEPA)
+       select(TIMESTAMP,avg_Teros_1, avg_Teros_2,SEPA)
+       
+       
+       Summer_2022_OLD <- Daily_ET_OLD %>%
+         filter(TIMESTAMP >= start_date_5, TIMESTAMP <= end_date_5)%>%
+         select(TIMESTAMP,PET_mm_day, AET_CS7_HESS,AET_CS8_HESS, AET_Teros_1_HESS, AET_Teros_2_HESS,AET_Teros_3_HESS, AET_Teros_4_HESS, AET_tenHS1_HESS, AET_tenHS2_HESS, AET_5TM1_HESS, AET_5TM2_HESS, Met_rainfall_mm_day,SEPA)
+       
+       #outpath <- "C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Hydrology/EvapoTranspiration"
+       setwd(outpath)
+       write.csv(Summer_2022_OLD, file = "Summer_2022_HESS.csv")
+       
+       
+       outpath <- "C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Hydrology/EvapoTranspiration"
+       setwd(outpath)
+       write.csv(Summer_2022_NEW, file = "Summer_2022_NEW.csv")
+       
+       start_date_6 <- as.Date("2022-09-01")
+       end_date_6 <- as.Date("2022-11-30")
+       
+       Autumn_2022 <- Daily_ET_NEW %>%
+         filter(TIMESTAMP >= start_date_6, TIMESTAMP <= end_date_6)%>%
+         select(TIMESTAMP,PET_mm_day, AET_CS7,AET_CS8, AET_Teros_1, AET_Teros_2,AET_Teros_3, AET_Teros_4, AET_tenHS1, AET_tenHS2, AET_5TM1, AET_5TM2, Met_rainfall_mm_day)
+       
+       
+       # outpath <- "C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Hydrology/EvapoTranspiration"
+       setwd(outpath)
+       write.csv(Autumn_2022, file = "Autumn_2022.csv")
+       
+       start_date_7 <- as.Date("2023-12-01")
+       end_date_7 <- as.Date("2023-02-28")
+       
+       Winter_2022 <- Daily_ET_NEW %>%
+         filter(TIMESTAMP >= start_date_7, TIMESTAMP <= end_date_7)%>%
+         select(TIMESTAMP,PET_mm_day, AET_CS7,AET_CS8, AET_Teros_1, AET_Teros_2,AET_Teros_3, AET_Teros_4, AET_tenHS1, AET_tenHS2, AET_5TM1, AET_5TM2, Met_rainfall_mm_day)
+       
+       
+       #outpath <- "C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Hydrology/EvapoTranspiration"
+       setwd(outpath)
+       write.csv(Winter_2022, file = "Winter_2022.csv")
+       
+       
+       SWMM <- Daily_ET_9 %>%
+         filter(TIMESTAMP >= start_date, TIMESTAMP <= end_date)%>%
+       select(TIMESTAMP,PET_mm_day, AET_Teros_2,AET_CS7)
+       
+       #setwd(outpath)
+       #write.csv(et_seasonal_filter, file = "et_seasonal_filter.csv", row.names = FALSE)
+       
+       report_plot <- Daily_ET_9 %>%
+           select(TIMESTAMP,Max_air_temp,avg_windspeed,Min_humidity,LAI,Atm_Press_RBGE_kPa,Net.Radiation_MJ_m2, PET_mm_day)
+                  #Set up a layout with five rows and one column
+       new_column_names <- c("TIMESTAMP", "Maximum daily air_temperature_Celsius", "Average Windspeed_m/s", "Humidity_%", "Leaf_area_index", "Average daily Atmospheric_pressure_kPa", "Average daily Net_radiation_MJ/m2", "Potential_ET_mm/day")
+       
+       colnames(report_plot) <- new_column_names
+       library(ggplot2)
+       plot_tableA <- ggplot(Summer_2021_NEW, aes(x = TIMESTAMP)) +
+         geom_line(aes(y = avg_Teros_1, color = "Variable 1 (Table A)"), linewidth = 1) +
+         geom_line(aes(y = avg_Teros_2, color = "Variable 2 (Table A)"), linewidth = 1) +
+         geom_line(aes(y = SEPA, color = "Variable 3 (Table A)"), size = 1,linetype = "dashed") +
+         scale_y_continuous(
+           name = "Variable 3 (Table A)",
+           sec.axis = sec_axis(~., name = "Variable 3 (Table A)")
+         ) +
+         labs(title = "Time Series Plot - Table A", y = "Values") +
+         theme_minimal()
+       
+       library(gridExtra)
+       plot_tableA <- ggplot(Summer_2021_NEW, aes(x = TIMESTAMP)) +
+         geom_line(aes(y = avg_Teros_1, color = "Variable 1 (Table A)"), linewidth = 1) +
+         geom_line(aes(y = avg_Teros_2, color = "Variable 2 (Table A)"), linewidth = 1) +
+         labs(title = "Time Series Plot - Table A", y = "Values") +
+         theme_minimal()
+       
+       
+       plot_tableB <- ggplot(Summer_2022_NEW, aes(x = TIMESTAMP)) +
+         geom_line(aes(y = avg_Teros_1, color = "Variable 1 (Table A)"), linewidth = 1) +
+         geom_line(aes(y = avg_Teros_2, color = "Variable 2 (Table A)"), linewidth = 1) +
+         labs(title = "Time Series Plot - Table A", y = "Values") +
+         theme_minimal()
+       
+       combined_plot <- grid.arrange(plot_tableA, plot_tableB, ncol = 1)
+       
+       print(combined_plot)
+       
+       plot_tableA <- ggplot(Summer_2021_NEW, aes(x = TIMESTAMP)) +
+         geom_line(aes(y = avg_Teros_1, color = "Variable 1 (Table A)", linetype = "avg_T1"), size = 1) +
+         geom_line(aes(y = avg_Teros_2, color = "Variable 2 (Table A)", linetype = "avg_T2"), size = 1) +
+         geom_line(aes(y = SEPA, color = "Variable 3 (Table A)", linetype = "SEP"), size = 1, linetype = "dashed") +
+         facet_wrap(~Variable, scales = "free_y") +
+         labs(title = "Time Series Plot - Table A", y = "Values") +
+         theme_minimal()
+       print(plot_tableA)
+       
