@@ -1,0 +1,363 @@
+[TITLE]
+;;Project Title/Notes
+Rain Garden Modelling - Royal Botanical Garden Edinburgh
+
+[OPTIONS]
+;;Option            	Value
+FLOW_UNITS          	LPS
+INFILTRATION        	GREEN_AMPT
+FLOW_ROUTING        	KINWAVE
+LINK_OFFSETS        	DEPTH
+MIN_SLOPE           	0
+ALLOW_PONDING       	NO
+SKIP_STEADY_STATE   	NO
+
+START_DATE          	04/30/2021
+START_TIME          	10:00:00
+REPORT_START_DATE   	06/24/2021
+REPORT_START_TIME   	15:00:00
+END_DATE            	02/27/2023
+END_TIME            	00:00:00
+SWEEP_START         	06/18
+SWEEP_END           	02/28
+DRY_DAYS            	10
+REPORT_STEP         	00:01:00
+WET_STEP            	00:01:00
+DRY_STEP            	00:01:00
+ROUTING_STEP        	0:01:00 
+RULE_STEP           	00:00:00
+
+INERTIAL_DAMPING    	PARTIAL
+NORMAL_FLOW_LIMITED 	BOTH
+FORCE_MAIN_EQUATION 	H-W
+VARIABLE_STEP       	0.75
+LENGTHENING_STEP    	5
+MIN_SURFAREA        	1.167
+MAX_TRIALS          	8
+HEAD_TOLERANCE      	0.0015
+SYS_FLOW_TOL        	5
+LAT_FLOW_TOL        	5
+MINIMUM_STEP        	0.5
+THREADS             	2
+
+[EVAPORATION]
+;;Data Source   	Parameters
+;;--------------	----------------
+TIMESERIES      	Evaporation_raingarden
+DRY_ONLY        	YES
+
+[TEMPERATURE]
+;;Data Element    	Values     
+FILE              	"C:\Users\KA59\OneDrive - Heriot-Watt University\EPA SWMM Projects\Working\Dec 2021\Input files\Climatefile_6mm_day.dat"
+WINDSPEED FILE    
+SNOWMELT          	34	0.5	0.6	24	50.0	0.0
+ADC IMPERVIOUS    	1.0	1.0	1.0	1.0	1.0	1.0	1.0	1.0	1.0	1.0
+ADC PERVIOUS      	1.0	1.0	1.0	1.0	1.0	1.0	1.0	1.0	1.0	1.0
+
+[RAINGAGES]
+;;Name          	Format   	Interval	SCF     	Source    
+;;--------------	---------	------	------	----------
+;Met Office Raingauge
+Met_Office_RG   	VOLUME   	0:01    	1.0     	FILE      	"C:\Users\KA59\OneDrive - Heriot-Watt University\EPA SWMM Projects\Working\Dec 2021\Input files\Met6.dat"	METOffice 	MM   
+;SEPA Raingauge
+SEPA_RG         	INTENSITY	1:00    	1.0     	FILE      	"C:\Users\KA59\OneDrive - Heriot-Watt University\EPA SWMM Projects\Working\Dec 2021\Input files\SEPA Rainfall.dat"	SEPA_RG   	MM   
+
+[SUBCATCHMENTS]
+;;Name          	Rain Gage       	Outlet          	Area    	%Imperv 	Width   	%Slope  	CurbLen 	SnowPack        
+;;--------------	----------------	----------------	--------	--------	--------	--------	--------	----------------
+RG1             	Met_Office_RG   	RG2             	0.0019  	0.0     	15.94   	0.0001  	0       	                
+RG2             	Met_Office_RG   	Dummy_Node      	0.0079  	0.0     	15.37   	0.0001  	0       	                
+UG1             	Met_Office_RG   	RG1             	0.0005  	0.0     	1       	0.042   	0       	                
+UG2             	Met_Office_RG   	RG2             	0.023   	0.0     	5       	0.04    	0       	                
+;Width=Area/(length of overland flow=46m)
+;%Slope=Average slope of subcatchment, From contour 23.9m-19m=4.9m/46m
+;N-Perv = Manning's n for overland flow over the pervious portion of the subcatchment.
+;N - Taken from Typical value from help. Value based on grass
+;Dstore-Perv = Depth of depression storage on the pervious portion of the subcatchment;Typical value taken from SWMM help; Lawn=2.54mm
+S1              	Met_Office_RG   	UG1             	0.005   	0.0     	15.08   	1.08    	0       	                
+;Width=Area/(length of overland flow=46m)
+;%Slope=Average slope of subcatchment, From contour 23.9m-19m=4.9m/46m
+;N-Perv = Manning's n for overland flow over the pervious portion of the subcatchment.
+;N - Taken from Typical value from help. Value based on grass
+;Dstore-Perv = Depth of depression storage on the pervious portion of the subcatchment;Typical value taken from SWMM help; Lawn=2.54mm
+;Area includes S1 also
+S2              	Met_Office_RG   	UG2             	0.085   	0.0     	18.47   	0.113   	0       	                
+
+[SUBAREAS]
+;;Subcatchment  	N-Imperv  	N-Perv    	S-Imperv  	S-Perv    	PctZero   	RouteTo   	PctRouted 
+;;--------------	----------	----------	----------	----------	----------	----------	----------
+RG1             	0.01      	0.24      	0.05      	2.54      	0         	PERVIOUS  	100       
+RG2             	0.01      	0.24      	0.05      	2.54      	0         	PERVIOUS  	100       
+UG1             	0.01      	0.24      	0.05      	2.54      	0         	OUTLET    
+UG2             	0.01      	0.24      	0         	2.54      	0         	OUTLET    
+S1              	0.01      	0.24      	0         	2.54      	0         	OUTLET    
+S2              	0.01      	0.24      	0         	2.54      	0         	OUTLET    
+
+[INFILTRATION]
+;;Subcatchment  	Param1    	Param2    	Param3    	Param4    	Param5    
+;;--------------	----------	----------	----------	----------	----------
+RG1             	61        	248       	0.9       	7         	0         
+RG2             	110       	30        	0.48      	7         	0         
+UG1             	60        	360       	0.18      	7         	0         
+UG2             	60        	360       	0.18      	7         	0         
+S1              	316.3     	0.7       	0.14      	7         	0         
+S2              	316.3     	0.7       	0.14      	7         	0         
+
+[LID_CONTROLS]
+;;Name          	Type/Layer	Parameters
+;;--------------	----------	----------
+RainGarden_LoamySand	BC
+RainGarden_LoamySand	SURFACE   	50        	0.95      	0.24      	0.07      	5         
+RainGarden_LoamySand	SOIL      	450       	0.42      	0.145     	0.06      	248       	28.5      	61        
+RainGarden_LoamySand	STORAGE   	50        	0.82      	2         	0         
+RainGarden_LoamySand	DRAIN     	0         	0.5       	6         	6         	0         	0         	          
+
+Raingarden_SandyLoam_0	BC
+Raingarden_SandyLoam_0	SURFACE   	50        	0.9       	0.24      	0.07      	5         
+Raingarden_SandyLoam_0	SOIL      	450       	0.41      	0.29      	0.15      	30        	100       	110       
+Raingarden_SandyLoam_0	STORAGE   	50        	0.82      	0.2       	0         
+Raingarden_SandyLoam_0	DRAIN     	0         	0.5       	6         	6         	0         	0         	          
+
+UG1_mulch       	BC
+UG1_mulch       	SURFACE   	0.0       	0.9       	0.24      	0.02      	5         
+UG1_mulch       	SOIL      	100       	0.46      	0.4       	0.38      	360       	100       	60        
+UG1_mulch       	STORAGE   	50        	0.82      	0.57      	0         
+UG1_mulch       	DRAIN     	0         	0.5       	6         	6         	0         	0         	          
+
+UG2_MULCH       	BC
+UG2_MULCH       	SURFACE   	0.0       	0.9       	0.24      	0.002     	5         
+UG2_MULCH       	SOIL      	100       	0.46      	0.42      	0.39      	360       	100       	60        
+UG2_MULCH       	STORAGE   	20        	0.82      	0.57      	0         
+UG2_MULCH       	DRAIN     	0         	0.5       	6         	6         	0         	0         	          
+
+[LID_USAGE]
+;;Subcatchment  	LID Process     	Number 	Area      	Width     	InitSat   	FromImp   	ToPerv    	RptFile                 	DrainTo         	FromPerv  
+;;--------------	----------------	-------	----------	----------	----------	----------	----------	------------------------	----------------	----------
+RG1             	RainGarden_LoamySand	1      	19        	0         	10        	0         	0         	"C:\Users\KA59\OneDrive - Heriot-Watt University\EPA SWMM Projects\Working\Dec 2021\Detailed Report RG1.txt"	*               	100             
+RG2             	Raingarden_SandyLoam_0	1      	79.00     	0         	48        	0         	1         	"C:\Users\KA59\OneDrive - Heriot-Watt University\EPA SWMM Projects\Working\Dec 2021\Detailed Report RG2.txt"	*               	100             
+UG1             	UG1_mulch       	1      	5.00      	0         	70        	0         	0         	"C:\Users\KA59\OneDrive - Heriot-Watt University\EPA SWMM Projects\Working\Dec 2021\Detailed report mulch.txt"	*               	100             
+UG2             	UG2_MULCH       	1      	150.00    	0         	0         	0         	1         	"C:\Users\KA59\OneDrive - Heriot-Watt University\EPA SWMM Projects\Working\Dec 2021\Detailed report mulch_2.txt"	*               	100             
+
+[AQUIFERS]
+;;Name          	Por   	WP    	FC    	Ksat  	Kslope	Tslope	ETu   	ETs   	Seep  	Ebot  	Egw   	Umc   	ETupat 
+;;--------------	------	------	------	------	------	------	------	------	------	------	------	------	------
+GI              	0.45  	0.28  	0.43  	0.45  	58    	0     	1     	2.1   	0.45  	20.9  	20.9  	0.37  	Seasonality_10HS1
+GI_Mulch        	0.405 	0.28  	0.385 	0.45  	58    	0     	1     	2     	0.45  	21    	21    	0.35  	Seasonality_mulch
+GI_Raingarden_Loamysand	0.43  	0.28  	0.39  	0.7   	58    	0     	0.35  	2     	0.45  	20    	20    	0.39  	      
+GI_Raingarden_sandyloam	0.42  	0.28  	0.4   	0.45  	45    	0     	0.35  	0.5   	0.6   	20    	21.9  	0.3   	Evaporation_pattern
+
+[GROUNDWATER]
+;;Subcatchment  	Aquifer         	Node            	Esurf 	A1    	B1    	A2    	B2    	A3    	Dsw   	Egwt  	Ebot  	Wgr   	Umc   
+;;--------------	----------------	----------------	------	------	------	------	------	------	------	------	------	------	------
+S1              	GI              	Dummy_Node      	23    	1     	1     	0     	0     	0     	0     	*     
+S2              	GI              	Dummy_Node      	23    	1     	1     	0     	0     	0     	0     	*     
+
+[SNOWPACKS]
+;;Name          	Surface   	Parameters
+;;--------------	----------	----------
+Snow            	PLOWABLE  	0.001     	0.001     	32.0      	0.10      	0.00      	0.00      	0.0       
+Snow            	IMPERVIOUS	0.001     	0.001     	32.0      	0.10      	0.00      	0.00      	0.00      
+Snow            	PERVIOUS  	0.001     	0.001     	32.0      	0.10      	0.00      	0.00      	0.00      
+Snow            	REMOVAL   	1.0       	0.0       	0.0       	0.0       	0.0       	0.0       	
+
+[JUNCTIONS]
+;;Name          	Elevation 	MaxDepth  	InitDepth 	SurDepth  	Aponded   
+;;--------------	----------	----------	----------	----------	----------
+;Assumed manhole invert as 23.8mAOD; 1.2m cover,
+;ground surface 25mAOD
+Dummy_Node      	23.8      	1.2       	0         	0         	0         
+
+[OUTFALLS]
+;;Name          	Elevation 	Type      	Stage Data      	Gated   	Route To        
+;;--------------	----------	----------	----------------	--------	----------------
+1               	0         	FREE      	                	NO      	                
+
+[CONDUITS]
+;;Name          	From Node       	To Node         	Length    	Roughness 	InOffset  	OutOffset 	InitFlow  	MaxFlow   
+;;--------------	----------------	----------------	----------	----------	----------	----------	----------	----------
+1               	Dummy_Node      	1               	5         	0.01      	0         	0         	0         	0         
+
+[XSECTIONS]
+;;Link          	Shape       	Geom1           	Geom2     	Geom3     	Geom4     	Barrels   	Culvert   
+;;--------------	------------	----------------	----------	----------	----------	----------	----------
+1               	CIRCULAR    	0.45            	0         	0         	0         	1         	          
+
+[TIMESERIES]
+;;Name          	Date      	Time      	Value     
+;;--------------	----------	----------	----------
+Evapo           	FILE	"C:\Users\KA59\OneDrive - Heriot-Watt University\EPA SWMM Projects\Working\Dec 2021\Input files\ET_SWMM_daily_silty_clay.dat"
+;
+;Raingarden evaporation
+Evaporation_raingarden	FILE	"C:\Users\KA59\OneDrive - Heriot-Watt University\EPA SWMM Projects\Working\Dec 2021\Input files\ET_SWMM_daily_raingarden.dat"
+;
+;Loamy sand
+Evaporation_loamy_sand	FILE	"C:\Users\KA59\OneDrive - Heriot-Watt University\EPA SWMM Projects\Working\Dec 2021\Input files\ET_SWMM_daily_loamysand.dat"
+;
+;Loamy sand
+Evaporation_sandy_loam	FILE	"C:\Users\KA59\OneDrive - Heriot-Watt University\EPA SWMM Projects\Working\Dec 2021\Input files\ET_SWMM_daily_sandyloam.dat"
+;
+ET_raingarden_temp	FILE	"C:\Users\KA59\OneDrive - Heriot-Watt University\EPA SWMM Projects\Working\Dec 2021\Input files\ET_SWMM_daily_raingarden_temp.dat"
+
+[PATTERNS]
+;;Name          	Type      	Multipliers
+;;--------------	----------	-----------
+Seasonality_10HS1	MONTHLY   	0.4  	0.5  	0.6  	0.7  	0.8  	1    
+Seasonality_10HS1	          	1    	1    	0.6  	0.4  	0.4  	0.4  
+;
+Seasonality_mulch	MONTHLY   	0.4  	0.5  	0.6  	0.7  	1    	1    
+Seasonality_mulch	          	1    	1    	0.5  	0.5  	0.5  	0.5  
+;
+Seasonality_loam	MONTHLY   	0.4  	0.5  	0.6  	0.7  	0.8  	1    
+Seasonality_loam	          	0.8  	0.8  	0.5  	0.4  	0.4  	0.4  
+;
+Seasonality     	MONTHLY   	0.4  	0.5  	0.6  	0.7  	0.8  	1    
+Seasonality     	          	1    	1    	0.6  	0.4  	0.4  	0.4  
+;
+Seasonality_sand	MONTHLY   	1    	1    	1    	1    	1    	1    
+Seasonality_sand	          	1    	1    	1    	1    	1    	1    
+;
+All_1           	MONTHLY   	1.0  	1.0  	1.0  	1.0  	1.0  	1.0  
+All_1           	          	1.0  	1.0  	1.0  	1.0  	1.0  	1.0  
+;
+Evaporation_pattern	MONTHLY   	0.1  	0.1  	0.1  	0.1  	0.3  	0.5  
+Evaporation_pattern	          	1.0  	1.0  	1.0  	0.8  	0.4  	0.1  
+
+[REPORT]
+;;Reporting Options
+INPUT     	YES
+CONTROLS  	YES
+SUBCATCHMENTS	ALL
+NODES	ALL
+LINKS	ALL
+
+[ADJUSTMENTS]
+;;Parameter   	Subcatchment    	Monthly Adjustments
+INFIL         	RG1             	Seasonality_sand
+INFIL         	RG2             	All_1
+INFIL         	S1              	Seasonality
+INFIL         	S2              	Seasonality
+
+[TAGS]
+
+[MAP]
+DIMENSIONS	324624.400	675152.500	324716.800	675220.200
+Units     	Meters
+
+[COORDINATES]
+;;Node          	X-Coord           	Y-Coord           
+;;--------------	------------------	------------------
+Dummy_Node      	324653.313        	675206.660        
+1               	324651.279        	675209.069        
+
+[VERTICES]
+;;Link          	X-Coord           	Y-Coord           
+;;--------------	------------------	------------------
+
+[Polygons]
+;;Subcatchment  	X-Coord           	Y-Coord           
+;;--------------	------------------	------------------
+RG1             	324650.339        	675201.324        
+RG1             	324653.167        	675198.438        
+RG1             	324651.784        	675197.142        
+RG1             	324650.893        	675196.307        
+RG1             	324649.427        	675195.665        
+RG1             	324649.427        	675195.665        
+RG1             	324646.195        	675196.232        
+RG1             	324645.625        	675197.066        
+RG1             	324645.605        	675197.335        
+RG1             	324645.920        	675197.676        
+RG1             	324646.450        	675198.139        
+RG1             	324646.765        	675198.522        
+RG1             	324646.765        	675198.522        
+RG1             	324650.339        	675201.324        
+RG2             	324650.478        	675201.490        
+RG2             	324651.111        	675202.012        
+RG2             	324651.428        	675202.273        
+RG2             	324651.586        	675202.403        
+RG2             	324651.745        	675202.534        
+RG2             	324652.378        	675203.055        
+RG2             	324653.011        	675203.577        
+RG2             	324659.341        	675210.023        
+RG2             	324663.166        	675213.776        
+RG2             	324665.548        	675210.745        
+RG2             	324656.996        	675202.210        
+RG2             	324655.467        	675200.813        
+RG2             	324654.599        	675199.926        
+RG2             	324653.306        	675198.604        
+RG2             	324650.478        	675201.490        
+UG1             	324653.306        	675198.604        
+UG1             	324658.722        	675192.468        
+UG1             	324657.049        	675190.905        
+UG1             	324651.943        	675185.515        
+UG1             	324650.477        	675185.420        
+UG1             	324650.477        	675185.420        
+UG1             	324647.324        	675184.012        
+UG1             	324647.324        	675184.012        
+UG1             	324645.787        	675186.041        
+UG1             	324644.066        	675187.147        
+UG1             	324644.066        	675193.909        
+UG1             	324644.066        	675193.909        
+UG1             	324646.334        	675196.398        
+UG1             	324649.566        	675195.831        
+UG1             	324651.032        	675196.473        
+UG1             	324651.923        	675197.308        
+UG1             	324653.306        	675198.604        
+UG2             	324665.692        	675210.673        
+UG2             	324671.827        	675212.983        
+UG2             	324662.467        	675197.872        
+UG2             	324658.722        	675192.468        
+UG2             	324658.722        	675192.468        
+UG2             	324653.306        	675198.604        
+UG2             	324654.599        	675199.926        
+UG2             	324655.467        	675200.813        
+UG2             	324656.996        	675202.210        
+UG2             	324657.626        	675202.786        
+S1              	324647.648        	675184.157        
+S1              	324650.477        	675185.420        
+S1              	324651.943        	675185.515        
+S1              	324657.049        	675190.905        
+S1              	324657.049        	675190.905        
+S1              	324658.722        	675192.468        
+S1              	324658.722        	675192.468        
+S1              	324658.722        	675192.468        
+S1              	324664.241        	675189.100        
+S1              	324670.504        	675182.786        
+S1              	324677.045        	675176.207        
+S1              	324683.255        	675169.891        
+S1              	324686.529        	675166.349        
+S1              	324679.930        	675158.264        
+S1              	324677.047        	675155.617        
+S1              	324668.547        	675164.366        
+S1              	324659.551        	675171.971        
+S1              	324654.331        	675176.196        
+S1              	324651.042        	675179.231        
+S1              	324647.324        	675184.012        
+S1              	324647.648        	675184.157        
+S2              	324686.529        	675166.349        
+S2              	324684.892        	675168.120        
+S2              	324684.074        	675169.006        
+S2              	324683.664        	675169.448        
+S2              	324683.460        	675169.670        
+S2              	324683.357        	675169.780        
+S2              	324683.255        	675169.891        
+S2              	324677.045        	675176.207        
+S2              	324670.504        	675182.786        
+S2              	324664.241        	675189.100        
+S2              	324658.722        	675192.468        
+S2              	324662.467        	675197.872        
+S2              	324672.205        	675212.941        
+S2              	324680.839        	675205.758        
+S2              	324706.666        	675189.559        
+S2              	324687.801        	675167.404        
+S2              	324686.529        	675166.349        
+
+[SYMBOLS]
+;;Gage          	X-Coord           	Y-Coord           
+;;--------------	------------------	------------------
+Met_Office_RG   	324693.336        	675207.776        
+SEPA_RG         	324653.104        	675161.882        
+
+
+[BACKDROP]
+FILE      	"C:\Users\KA59\OneDrive - Heriot-Watt University\EPA SWMM Projects\Working\Dec 2021\Contour_Channel and Basins.PNG"
+DIMENSIONS	324624.400	675152.500	324716.800	675220.200
