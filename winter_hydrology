@@ -1,0 +1,434 @@
+et_seasonal <- read.csv("C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Hydrology/soil_moisture_sensors_met_sepa_calibrated.csv")
+#met_cosmos <- read.csv("C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Hydrology/EvapoTranspiration/Met_office_data_and_COSMOS_data.csv")
+
+et_seasonal$timestamp <- as.POSIXct(paste(et_seasonal$timestamp), format = "%Y-%m-%d %H:%M:%S")
+
+#met_cosmos$TIMESTAMP <- as.POSIXct(paste(met_cosmos$TIMESTAMP), format = "%d/%m/%Y %H:%M")
+
+et_seasonal$Met_Rainfall_mm[is.na(et_seasonal$Met_Rainfall_mm)] <- 0
+
+#Append na values of TenHS 2 (mulch) with values from 5TM 2 mulch
+library(dplyr)
+et_seasonal <- et_seasonal %>%
+  mutate(value.X5TM_2_VWC = ifelse(is.na(value.X5TM_2_VWC), value.tenHS_VWC_2, value.X5TM_2_VWC))
+
+#replace 10HS2 (mulch) with 5TM2 (mulch)
+
+et_seasonal$value.tenHS_VWC_2 <- et_seasonal$value.X5TM_2_VWC
+
+library(dplyr)
+#str(et_seasonal)
+# Interpolate zero values with values immediately above and below
+et_seasonal <- et_seasonal %>%
+  mutate(Ground_temp = ifelse(Grass.Temperature == 0, (lag(Grass.Temperature) + lead(Grass.Temperature)) / 2, Grass.Temperature))
+
+columns_to_drop <- c("value.VWC_CS8", "value.VWC_TERROS_2","value.VWC_TERROS_3","value.VWC_TERROS_4","value.X5TM_2_VWC","Dry.Bulb.Temperature","Grass.Temperature","SEPA_rainfall")
+
+et_seasonal <- et_seasonal %>%
+  select(-one_of(columns_to_drop))
+
+et_seasonal_filter <- et_seasonal %>%
+  filter(timestamp > as.POSIXct("2021-06-25 13:00:00"))
+#str(met_cosmos)
+#met and COSMOS
+columns_to_drop_met <- c("Row_ID", "Rainfall_mm","Dry.Bulb.Temperature","Dew.Point.Temperature","Grass.Temperature","X10cm.Soil.Temperature","X30cm.Soil.Temperature","X100cm.Soil.Temperature","Rainfall.Total.since.0900","Humidity_EB","Air.Temperature_EB","Atmospheric.Pressure_EB","Incoming.longwave.radiation..corrected.","Outgoing.longwave.radiation..corrected.","Incoming.shortwave.radiation","Outgoing.shortwave.radiation","Net.Radiation_EB","Wind.direction","Wind.Speed_EB")
+
+#met_cosmos <- met_cosmos %>%
+ # select(-one_of(columns_to_drop_met))
+
+#met_cosmos_filter <- met_cosmos %>%
+ # filter(TIMESTAMP > as.POSIXct("2021-06-25 13:00:00"))
+#colnames(met_cosmos_filter)[colnames(met_cosmos_filter) == "TIMESTAMP"] ="timestamp"
+#head(et_seasonal)
+
+target_column <- "Met_Rainfall_mm"
+
+#Apply wetness state based on rainfall
+
+library(zoo)
+
+df <- et_seasonal_filter %>%
+  mutate(wetness_state = ifelse(rollapply(get(target_column) == 0, width = 4, FUN = all, fill = NA, align = "right"), "Dry", "Wet"))
+
+df$wetness_state[is.na(df$wetness_state)] <- 0
+
+df <- df[-1:-3,]
+
+#target_column <- "wetness_state"
+
+df <- df %>%
+  mutate(UntilDryCount = ave(wetness_state == "Dry", cumsum(wetness_state == "Wet"), FUN = cumsum))
+
+#df <- df %>%
+ # mutate(
+  #  Avgtemp = ifelse(wetness_state == "Wet", ave(Met_Rainfall_mm, cumsum(wetness_state == "Dry"), FUN = cumsum), NA)
+  #)
+#df <- df %>%
+ # mutate(
+  #  Sumofrainfall = ifelse(wetness_state == "Wet", ave(Met_Rainfall_mm, cumsum(wetness_state == "Dry"), FUN = cumsum), NA  )
+
+# Load the data.table library
+library(dplyr)
+
+#df_2 <- left_join(df,met_cosmos_filter, by = "timestamp")
+
+#df2_distinct <- distinct(df_2, timestamp)
+distinct_df_2 <- df %>% 
+  distinct(timestamp, .keep_all = TRUE)
+
+
+library(data.table)
+
+sms_data <- distinct_df_2
+
+sms_data$Ground_temp <- round(sms_data$Ground_temp, 1)
+
+#outpath <- "C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Hydrology/EvapoTranspiration"
+#setwd(outpath)
+#write.csv(sms_data, file = "All_dry_period_ET.csv")
+
+#sms_data <- sms_data %>%
+ # filter(value.VWC_CS7 <= 0.16)
+
+# Convert 'df' to a data.table
+setDT(sms_data)
+
+#str(sms_data)
+
+# Calculate 'from' and 'to' for each consecutive run of the same state
+result <- sms_data[, .(from = min(timestamp), to = max(timestamp)), by = .(state = as.character(rleid(wetness_state)))]
+
+colnames(result)[colnames(result) == "from"] ="timestamp"
+colnames(result)[colnames(result) == "to"] ="timestamp_To"
+
+merged_data <- inner_join(result, sms_data, by = "timestamp")
+
+colnames(merged_data)[colnames(merged_data) == "value.VWC_CS7"] ="CS7_start"
+colnames(merged_data)[colnames(merged_data) == "value.VWC_TERROS_1"] ="TERROS_1_start"
+colnames(merged_data)[colnames(merged_data) == "value.X5TM_1_VWC"] ="5TM_start"
+colnames(merged_data)[colnames(merged_data) == "value.VWC_CS8"] ="CS8_start"
+colnames(merged_data)[colnames(merged_data) == "value.VWC_TERROS_2"] ="TERROS_2_start"
+colnames(merged_data)[colnames(merged_data) == "value.tenHS_VWC_1"] ="tenHS_1_start"
+colnames(merged_data)[colnames(merged_data) == "value.tenHS_VWC_2"] ="tenHS_2_start"
+#colnames(merged_data)[colnames(merged_data) == "value.X5TM_2_VWC"] ="x5TM_2_start"
+
+#rechange column heading for inner join on to date
+colnames(merged_data)[colnames(merged_data) == "timestamp"] ="from"
+colnames(merged_data)[colnames(merged_data) == "timestamp_To"] ="timestamp"
+
+columns_to_drop <- c("Met_Rainfall_mm","Air_temp","wetness_state","UntilDryCount")
+
+#str(merged_data)
+
+merged_data <- merged_data %>%
+  select(-one_of(columns_to_drop))
+
+merged_data$timestamp <- merged_data$timestamp - as.difftime(0.5, units = "hours")
+
+#colnames(merged_data_2)[colnames(merged_data_2) == "value.VWC_CS7"] ="CS7_end"
+#colnames(merged_data_2)[colnames(merged_data_2) == "value.VWC_TERROS_1"] ="TERROS_1_end"
+#colnames(merged_data_2)[colnames(merged_data_2) == "value.X5TM_1_VWC"] ="5TM_end"
+
+#merged_data <- merged_data %>%
+ # filter(UntilDryCount>2)
+
+#subtract_1hour <- merged_data
+
+#previous 1 hour time step taken as met office rainfall is of 1hr resolution  
+#subtract_1hour$timestamp <- subtract_1hour$timestamp - as.difftime(1, units = "hours")
+
+columns_to_drop <- c("Met_Rainfall_mm","Air_temp","wetness_state","UntilDryCount")
+
+#str(merged_data)
+
+subtract_1hour <- merged_data %>%
+  select(-one_of(columns_to_drop)) 
+
+slope_data_master <- inner_join(subtract_1hour, sms_data, by = "timestamp")
+
+colnames(slope_data_master)[colnames(slope_data_master) == "value.VWC_CS7"] ="CS7_end"
+colnames(slope_data_master)[colnames(slope_data_master) == "value.VWC_TERROS_1"] ="TERROS_1_end"
+colnames(slope_data_master)[colnames(slope_data_master) == "value.X5TM_1_VWC"] ="5TM_end"
+colnames(slope_data_master)[colnames(slope_data_master) == "value.VWC_CS8"] ="CS8_end"
+colnames(slope_data_master)[colnames(slope_data_master) == "value.VWC_TERROS_2"] ="TERROS_2_end"
+colnames(slope_data_master)[colnames(slope_data_master) == "timestamp"] ="To"
+colnames(slope_data_master)[colnames(slope_data_master) == "value.tenHS_VWC_1"] ="tenHS_1_end"
+colnames(slope_data_master)[colnames(slope_data_master) == "value.tenHS_VWC_2"] ="tenHS_2_end"
+#colnames(slope_data_master)[colnames(slope_data_master) == "value.X5TM_2_VWC"] ="x5TM_2_end"
+
+colnames(slope_data_master)[colnames(slope_data_master) == "timestamp"] ="To"
+
+#drying period 6hrs and above are taken forward for assessment
+slope_data_master <- slope_data_master %>%
+  filter(UntilDryCount>10)
+
+outpath <- "C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Hydrology/EvapoTranspiration"
+setwd(outpath)
+write.csv(slope_data_master, file = "Slope_ET.csv")
+
+et_cs7 <- read.csv("C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Hydrology/EvapoTranspiration/Slope_ET.csv")
+#str(et_cs7)
+columns_to_drop <- c("X", "state","X5TM_start","X5TM_end")
+
+et_cs7 <- et_cs7 %>%
+  select(-one_of(columns_to_drop)) 
+
+#this step is now void as values already filtered to below field capacity of 0.1 at the start
+#retained for future assessment
+
+et_cs7_fc <- et_cs7 %>%
+  filter(CS7_start >0.14)
+
+et_cs7_fc <- et_cs7_fc %>%
+  mutate(VWC_difference = CS7_start - CS7_end)
+
+et_cs7_fc$VWC_difference <- round(et_cs7_fc$VWC_difference, 3)
+
+et_cs7_fc <- et_cs7_fc %>%
+  filter(VWC_difference >0)
+
+et_cs7_fc$from <- as.POSIXct(paste(et_cs7_fc$from), format = "%Y-%m-%d %H:%M:%S")
+et_cs7_fc$To <- as.POSIXct(paste(et_cs7_fc$To), format = "%Y-%m-%d %H:%M:%S")
+
+# Calculate the slope
+
+et_cs7_fc <- et_cs7_fc %>%
+  mutate(TimeElapsed = as.numeric(To - from))
+
+et_cs7_fc <- et_cs7_fc %>%
+  mutate(slope = (VWC_difference/TimeElapsed)/60) %>%
+  filter(!is.na(slope))
+#repeat for Teros 1
+
+et_Teros_1_fc <- et_cs7 %>%
+  filter(TERROS_1_start >0.31)
+
+et_Teros_1_fc <- et_Teros_1_fc %>%
+  mutate(VWC_difference = TERROS_1_start - TERROS_1_end)
+
+et_Teros_1_fc$VWC_difference <- round(et_Teros_1_fc$VWC_difference, 3)
+
+et_Teros_1_fc <- et_Teros_1_fc %>%
+  filter(VWC_difference >0)
+
+et_Teros_1_fc$from <- as.POSIXct(paste(et_Teros_1_fc$from), format = "%Y-%m-%d %H:%M:%S")
+et_Teros_1_fc$To <- as.POSIXct(paste(et_Teros_1_fc$To), format = "%Y-%m-%d %H:%M:%S")
+
+# Calculate the slope
+
+et_Teros_1_fc <- et_Teros_1_fc %>%
+  mutate(TimeElapsed = as.numeric(To - from))
+
+et_Teros_1_fc <- et_Teros_1_fc%>%
+  mutate(slope = (VWC_difference/TimeElapsed)/60) %>%
+  filter(!is.na(slope))
+
+#repeat for TenHS 1
+
+et_tenHS_1_fc <- et_cs7 %>%
+  filter(tenHS_1_start >0.415)
+
+et_tenHS_1_fc <- et_tenHS_1_fc %>%
+  mutate(VWC_difference = tenHS_1_start - tenHS_1_end)
+
+et_tenHS_1_fc$VWC_difference <- round(et_tenHS_1_fc$VWC_difference, 3)
+
+et_tenHS_1_fc <- et_tenHS_1_fc %>%
+  filter(VWC_difference >0)
+
+et_tenHS_1_fc$from <- as.POSIXct(paste(et_tenHS_1_fc$from), format = "%Y-%m-%d %H:%M:%S")
+et_tenHS_1_fc$To <- as.POSIXct(paste(et_tenHS_1_fc$To), format = "%Y-%m-%d %H:%M:%S")
+
+# Calculate the slope
+
+et_tenHS_1_fc <- et_tenHS_1_fc %>%
+  mutate(TimeElapsed = as.numeric(To - from))
+
+et_tenHS_1_fc <- et_tenHS_1_fc%>%
+  mutate(slope = (VWC_difference/TimeElapsed)/60) %>%
+  filter(!is.na(slope))
+
+#TenHS 2
+
+et_tenHS_2_fc <- et_cs7 %>%
+  filter(tenHS_2_start >0.39)
+
+et_tenHS_2_fc <- et_tenHS_2_fc %>%
+  mutate(VWC_difference = tenHS_2_start - tenHS_2_end)
+
+et_tenHS_2_fc$VWC_difference <- round(et_tenHS_2_fc$VWC_difference, 3)
+
+et_tenHS_2_fc <- et_tenHS_2_fc %>%
+  filter(VWC_difference >0)
+
+et_tenHS_2_fc$from <- as.POSIXct(paste(et_tenHS_2_fc$from), format = "%Y-%m-%d %H:%M:%S")
+et_tenHS_2_fc$To <- as.POSIXct(paste(et_tenHS_2_fc$To), format = "%Y-%m-%d %H:%M:%S")
+
+# Calculate the slope
+
+et_tenHS_2_fc <- et_tenHS_2_fc %>%
+  mutate(TimeElapsed = as.numeric(To - from))
+
+et_tenHS_2_fc <- et_tenHS_2_fc%>%
+  mutate(slope = (VWC_difference/TimeElapsed)/60) %>%
+  filter(!is.na(slope))
+
+library(lubridate)
+
+# Define a function to assign seasons based on months
+get_season <- function(month) {
+  if (month %in% 3:5) {
+    return("Spring")
+  } else if (month %in% 6:8) {
+    return("Summer")
+  } else if (month %in% 9:11) {
+    return("Autumn")
+  } else {
+    return("Winter")
+  }
+}
+
+et_cs7_fc <- et_cs7_fc %>%
+  mutate(Month = month(from))
+
+#et_cs8_fc <- et_cs8_fc %>%
+ # mutate(Month = month(from))
+
+et_Teros_1_fc <- et_Teros_1_fc %>%
+  mutate(Month = month(from))
+
+#Teros_2 <- Teros_2 %>%
+ # mutate(Month = month(from))
+
+et_tenHS_1_fc <- et_tenHS_1_fc %>%
+  mutate(Month = month(from))
+
+et_tenHS_2_fc <- et_tenHS_2_fc %>%
+  mutate(Month = month(from))
+
+# Apply the get_season function to create a new column Season
+
+et_cs7_fc <- et_cs7_fc %>%
+  mutate(Season = sapply(Month, get_season))
+
+#et_cs8_fc <- et_cs8_fc %>%
+ # mutate(Season = sapply(Month, get_season))
+
+et_Teros_1_fc <- et_Teros_1_fc %>%
+  mutate(Season = sapply(Month, get_season))
+
+
+#Teros_2 <- Teros_2 %>%
+ # mutate(Season = sapply(Month, get_season))
+
+et_tenHS_1_fc <- et_tenHS_1_fc %>%
+  mutate(Season = sapply(Month, get_season))
+
+et_tenHS_2_fc <- et_tenHS_2_fc %>%
+  mutate(Season = sapply(Month, get_season))
+
+
+et_cs7_fc <- et_cs7_fc %>%
+  mutate(Month2 = month.name[Month])
+
+#et_cs8_fc <- et_cs8_fc %>%
+ # mutate(Month2 = month.name[Month])
+
+et_Teros_1_fc <- et_Teros_1_fc %>%
+  mutate(Month2 = month.name[Month])
+
+#Teros_2 <- Teros_2%>%
+ # mutate(Month2 = month.name[Month])
+
+et_tenHS_1_fc <- et_tenHS_1_fc %>%
+  mutate(Month2 = month.name[Month])
+
+et_tenHS_2_fc <- et_tenHS_2_fc %>%
+  mutate(Month2 = month.name[Month])
+
+#soil type
+
+et_cs7_fc <- et_cs7_fc %>%
+  mutate(Soil = "Loamy sand")
+
+#et_cs8_fc <- et_cs8_fc %>%
+# mutate(Month2 = month.name[Month])
+
+et_Teros_1_fc <- et_Teros_1_fc %>%
+  mutate(Soil = "Sandy loam")
+
+#Teros_2 <- Teros_2%>%
+# mutate(Month2 = month.name[Month])
+
+et_tenHS_1_fc <- et_tenHS_1_fc %>%
+  mutate(Soil = "Existing soil")
+
+et_tenHS_2_fc <- et_tenHS_2_fc %>%
+  mutate(Soil = "Mulch")
+
+#outpath <- "C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Hydrology/"
+#setwd(outpath)
+#write.csv(et_cs7_fc, file = "et_cs7_fc_0.16.csv", row.names = FALSE)
+
+# Print the updated data frame
+#print(et_cs7_fc)
+
+
+#df3 <- data.frame(NumericColumn = c(1:12))
+
+# Mapping vector
+#mapping <- c("a", "b", "c", "d", "e","f","g","h","i","j","k","l")
+
+# Update NumericColumn with corresponding character values
+#et_cs7_fc$UpdatedColumn <- mapping[et_cs7_fc$Month]
+
+#et_cs7_fc$Month3 <- paste("(",et_cs7_fc$UpdatedColumn,")",et_cs7_fc$Month2)
+# Load necessary packages
+library(ggplot2)
+library(ggpmisc)
+library(ggpubr)
+# Function to extract R-squared values
+get_r_squared <- function(model) {
+  summary(model)$r.squared
+}
+
+desired_order_season <- c("Spring", "Summer", "Autumn", "Winter")
+
+# Convert Month3 to factor with the desired order
+et_cs7_fc$Season <- factor(et_cs7_fc$Season, levels = desired_order_season)
+et_Teros_1_fc$Season <- factor(et_Teros_1_fc$Season, levels = desired_order_season)
+et_tenHS_1_fc$Season <- factor(et_tenHS_1_fc$Season, levels = desired_order_season)
+et_tenHS_2_fc$Season <- factor(et_tenHS_2_fc$Season, levels = desired_order_season)
+
+appended_table <- rbind(et_cs7_fc, et_Teros_1_fc,et_tenHS_1_fc,et_tenHS_2_fc)
+
+library(dplyr)
+#library(stringr)
+library(ggrepel)
+subset_data <- appended_table %>%
+  filter(Season %in% c("Summer","Winter"))
+
+# Threshold for labeling
+threshold <- 3
+
+# Filter data for labelling based on temp condition
+filtered_df <- subset(appended_table, Ground_temp.y < threshold)
+
+  ggplot(appended_table, aes(x = Soil, y = slope, color = Season, shape = Season))+
+    geom_point(size=3)+
+    geom_text_repel(data = filtered_df, aes(label = Ground_temp.y), color = "blue", max.overlaps = 60) +
+        labs(title = "Slope of drainage",
+         x = "Soil Type",
+         y = "Slope of VWC") +
+    theme_minimal() +
+    #scale_x_continuous(limits = c(0, NA)) +  # Set minimum value for x-axis
+    #scale_y_continuous(limits = c(0, 8e-05))+  # Set minimum value for y-axis
+    theme(axis.text = element_text(size = 10),  # Adjust the font size
+          axis.title = element_text(size = 9),  # Adjust the font size of axis titles
+          plot.title = element_text(size = 10),  # Adjust the font size of plot title
+          axis.text.x = element_text(size = 10),  # Adjust the font size of x-axis labels
+          axis.text.y = element_text(size = 9),  # Adjust the font size of y-axis labels
+          axis.title.x = element_text(size = 9),  # Adjust the font size of x-axis title
+          axis.title.y = element_text(size = 9),  # Adjust the font size of y-axis title
+          legend.text = element_text(size = 7),  # Adjust the font size of legend text
+          legend.title = element_text(size = 7))  # Adjust the font size of legend title
