@@ -1,0 +1,191 @@
+#Data upto 28th Feb 2023 filtered
+
+Histo <- read.csv("C:/Users/KA59/OneDrive - Heriot-Watt University/Project Folder/RBGE/Hydrology/soil_moisture_sensors_met_sepa_calibrated_v1.csv")
+
+Histo$timestamp <- as.POSIXct(paste(Histo$timestamp), format = "%Y-%m-%d %H:%M:%S")
+
+
+# Load necessary libraries
+library(ggplot2)
+library(lubridate)
+library(dplyr)
+library(patchwork)  # For arranging plots side by side
+
+
+Histo_1 <- Histo %>%
+  filter(timestamp <= as.POSIXct("2023-03-28 23:59:59"))
+# Assume Histo_1 dataset is already loaded and timestamp has been converted to POSIXct format
+
+# Add season column
+get_season <- function(month) {
+  if (month %in% 3:5) {
+    return("Spring")
+  } else if (month %in% 6:8) {
+    return("Summer")
+  } else if (month %in% 9:11) {
+    return("Autumn")
+  } else {
+    return("Winter")
+  }
+}
+
+Histo_1$Season <- sapply(month(Histo_1$timestamp), get_season)
+# Set the order of the Season factor
+Histo_1$Season <- factor(Histo_1$Season, levels = c("Spring", "Summer", "Autumn", "Winter"))
+
+
+# Filter datasets for each variable and include the 'Season' column
+
+VWC_TERROS_1 <- Histo_1 %>%
+  filter(!is.na(value.VWC_TERROS_1) & value.VWC_TERROS_1 > 0 & value.VWC_TERROS_1 < 0.5) %>%
+  select(value.VWC_TERROS_1, Season)
+
+
+VWC_TERROS_2 <- Histo_1 %>%
+  filter(!is.na(value.VWC_TERROS_2)) %>%
+  select(value.VWC_TERROS_2, Season)
+
+VWC_5TM_1 <- Histo_1 %>%
+  filter(!is.na(value.X5TM_1_VWC) & value.X5TM_1_VWC > 0 & value.X5TM_1_VWC < 0.5) %>%
+  select(value.X5TM_1_VWC, Season)
+
+# Function to create a histogram with density
+create_histogram <- function(data, variable, title) {
+  num_bins <- 10
+  breaks <- seq(min(data[[variable]]), max(data[[variable]]), length.out = num_bins + 1)
+  
+  hist_plot <- ggplot(data, aes_string(x = variable)) + 
+    geom_histogram(breaks = breaks, fill = "skyblue", color = "black", alpha = 0.7, aes(y = ..density..)) +
+    labs(x = "VWC (m3/m3)", y = "Density", title = title) +
+    theme_minimal() +
+    theme(panel.grid = element_blank()) +
+    geom_density(color = "red", size = 1.5) +
+    scale_x_continuous(limits = c(0.05, 0.5)) +  # Set x-axis limits
+    scale_y_continuous(limits = c(0, 20))    # Set y-axis limits
+  
+  return(hist_plot)
+}
+
+# Function to create a violin plot with a box plot inside by season
+create_violin_plot <- function(data, variable, title) {
+  violin_plot <- ggplot(data, aes_string(x = "Season", y = variable, fill = "Season")) + 
+    geom_violin(trim = FALSE, alpha = 0.5) +
+    geom_boxplot(width = 0.1, position = position_dodge(0.9), outlier.shape = NA, color = "black") +  # Box plot inside violin
+    labs(x = NULL, y = "VWC (m3/m3)", title = title) +
+    theme_minimal() +
+    theme(panel.grid = element_blank()) +  # Remove grid lines from violin plot
+    # Add median points
+    
+    stat_summary(fun = median, geom = "point", aes(color = Season), size = 1, position = position_dodge(0.9)) +
+    scale_color_manual(values = c("Winter" = "blue", "Spring" = "green", "Summer" = "yellow", "Autumn" = "orange")) +
+    theme(legend.position = "none")+  # Remove legend for color
+  ylim(0, 0.5)  # Set uniform y-axis limits from 0 to 0.5
+  
+  return(violin_plot)
+}
+
+
+# Create plots for each variable
+
+hist_VWC_TERROS_1 <- create_histogram(VWC_TERROS_1, "value.VWC_TERROS_1", "Sandy loam at 0.12m depth")
+violin_VWC_TERROS_1 <- create_violin_plot(VWC_TERROS_1, "value.VWC_TERROS_1", "")
+
+hist_VWC_TERROS_2 <- create_histogram(VWC_TERROS_2, "value.VWC_TERROS_2", "Sandy loam at 0.2m depth")
+violin_VWC_TERROS_2 <- create_violin_plot(VWC_TERROS_2, "value.VWC_TERROS_2", "")
+
+hist_VWC_5TM_1 <- create_histogram(VWC_5TM_1, "value.X5TM_1_VWC", "Sandy loam at 0.15m depth")
+violin_VWC_5TM_1 <- create_violin_plot(VWC_5TM_1, "value.X5TM_1_VWC", "")
+
+combined_plots_1 <- (hist_VWC_TERROS_1 + violin_VWC_TERROS_1) / 
+ (hist_VWC_5TM_1 + violin_VWC_5TM_1) /
+  (hist_VWC_TERROS_2 + violin_VWC_TERROS_2)
+
+# Display the combined image
+combined_plots_1
+
+# Filter datasets for each variable and include the 'Season' column
+VWC_CS8 <- Histo_1[!is.na(Histo_1$value.VWC_CS8), ] %>%
+  select(value.VWC_CS8, Season)
+
+VWC_tenHS_1 <- Histo_1 %>%
+  filter(!is.na(value.tenHS_VWC_1) & value.tenHS_VWC_1 > 0 & value.tenHS_VWC_1 < 0.5) %>%
+  select(value.tenHS_VWC_1, Season)
+
+VWC_tenHS_2 <- Histo_1 %>%
+  filter(!is.na(value.tenHS_VWC_2) & value.tenHS_VWC_2 > 0 & value.tenHS_VWC_2 < 0.5) %>%
+  select(value.tenHS_VWC_2, Season)
+
+
+# Function to create a violin plot with a box plot inside by season
+create_violin_plot <- function(data, variable, title) {
+  violin_plot <- ggplot(data, aes_string(x = "Season", y = variable, fill = "Season")) + 
+    geom_violin(trim = FALSE, alpha = 0.5) +
+    geom_boxplot(width = 0.1, position = position_dodge(0.9), outlier.shape = NA, color = "black") +  # Box plot inside violin
+    labs(x = NULL, y = "VWC (m3/m3)", title = title) +
+    theme_minimal() +
+    theme(panel.grid = element_blank()) +  # Remove grid lines from violin plot
+    # Add median points
+    stat_summary(fun = median, geom = "point", aes(color = Season), size = 1, position = position_dodge(0.9)) +
+    scale_color_manual(values = c("Winter" = "blue", "Spring" = "green", "Summer" = "yellow", "Autumn" = "orange")) +
+    theme(legend.position = "none")+  # Remove legend for color
+    ylim(0, 0.5)  # Set uniform y-axis limits from 0 to 0.5
+  
+  return(violin_plot)
+}
+
+# Create plots for each variable
+hist_VWC_CS8 <- create_histogram(VWC_CS8, "value.VWC_CS8", "Existing soil - silty clay beside raingarden at 0.2m")
+violin_VWC_CS8 <- create_violin_plot(VWC_CS8, "value.VWC_CS8","")
+
+hist_tenHS_1 <- create_histogram(VWC_tenHS_1, "value.tenHS_VWC_1", "Existing soil - silty clay under turf at 0.12m")
+violin_VWC_tenHS_1 <- create_violin_plot(VWC_tenHS_1, "value.tenHS_VWC_1","")
+
+hist_tenHS_2 <- create_histogram(VWC_tenHS_2, "value.tenHS_VWC_2", "Existing soil - silty clay under mulch at 0.12m")
+violin_VWC_tenHS_2 <- create_violin_plot(VWC_tenHS_2, "value.tenHS_VWC_2","")
+
+# Load patchwork library for arranging multiple plots
+library(ggplot2)
+library(patchwork)
+
+# Combine plots into a grid with a 30/70 split for the layout
+combined_plots_2 <- 
+  (hist_tenHS_1 + violin_VWC_tenHS_1) / 
+  (hist_VWC_CS8 + violin_VWC_CS8) / 
+  (hist_tenHS_2 + violin_VWC_tenHS_2) + 
+  plot_layout(nrow = 3, widths = c(0.3, 0.7))  # Stack vertically, but split columns 30/70
+
+# Display the combined image
+combined_plots_2
+
+# Filter datasets for each variable and include the 'Season' column
+
+VWC_TERROS_3 <- Histo_1 %>%
+  filter(!is.na(value.VWC_TERROS_3) & value.VWC_TERROS_3 > 0 & value.VWC_TERROS_3 < 0.5) %>%
+  select(value.VWC_TERROS_3, Season)
+
+VWC_TERROS_4 <- Histo_1 %>%
+  filter(!is.na(value.VWC_TERROS_4) & value.VWC_TERROS_4 > 0 & value.VWC_TERROS_4 < 0.5) %>%
+  select(value.VWC_TERROS_4, Season)
+
+VWC_CS7 <- Histo_1 %>%
+  filter(!is.na(value.VWC_CS7) & value.VWC_CS7 > 0 & value.VWC_CS7 < 0.5) %>%
+  select(value.VWC_CS7, Season)
+
+hist_VWC_TERROS_3 <- create_histogram(VWC_TERROS_3, "value.VWC_TERROS_3", "Sandy loam at 0.4m depth")
+violin_VWC_TERROS_3 <- create_violin_plot(VWC_TERROS_3, "value.VWC_TERROS_3", "")
+
+hist_VWC_TERROS_4 <- create_histogram(VWC_TERROS_4, "value.VWC_TERROS_4", "Sandy loam at 0.3m depth")
+violin_VWC_TERROS_4 <- create_violin_plot(VWC_TERROS_4, "value.VWC_TERROS_4", "")
+
+hist_VWC_CS7 <- create_histogram(VWC_CS7, "value.VWC_CS7", "Loamy sand at 0.2m depth")
+violin_VWC_CS7 <- create_violin_plot(VWC_CS7, "value.VWC_CS7", "")
+
+combined_plots_3 <- 
+  (hist_VWC_TERROS_4 + violin_VWC_TERROS_4) / 
+  (hist_VWC_TERROS_3 + violin_VWC_TERROS_3) / 
+  (hist_VWC_CS7 + violin_VWC_CS7) + 
+  plot_layout(nrow = 3, widths = c(0.3, 0.7))  # Stack vertically, but split columns 30/70
+
+# Display the combined image
+combined_plots_3
+
